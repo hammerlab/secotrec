@@ -1,0 +1,635 @@
+open Common
+
+module Node = struct
+
+  type local_directory = string
+  type property = [
+    | `Has_directory of string * [`All_rwx]
+  ]
+
+  let has_directory ?(access = `All_rwx) path : property =
+    `Has_directory (path, access)
+
+  type t = {
+    host : [
+      | `Localhost
+      | `Gcloud of Gcloud_instance.t
+    ] [@main];
+    properties: property list;
+  } [@@deriving make]
+
+  let localhost ?properties () =
+    make `Localhost ?properties
+  let gcloud ?properties g = make (`Gcloud g) ?properties
+end
+
+type t = {
+  node: Node.t;
+  (* compose_configuration : Docker_compose.Configuration.t; *)
+  gke_cluster : Gke_cluster.t option;
+  db : Postgres.t option;
+  dns : Gcloud_dns.t option;
+  extra_nfs : Nfs.Fresh.t option; (* TODO: switch to a list *)
+  ketrew : Ketrew_server.t option;
+  coclobas : Coclobas.t option;
+  letsencrypt : Letsencrypt.t option;
+  biokepi_machine : Biokepi_machine_generation.t option;
+  proxy_nginx: Nginx.Proxy.t option;
+  tlstunnel : Tlstunnel.t option;
+  preparation: Data_preparation.t option;
+  name : string [@main ];
+} [@@deriving make]
+
+let name t = t.name
+
+let compose_configuration t =
+  List.filter_opt [
+    Option.map ~f:Nginx.Proxy.to_service t.proxy_nginx;
+    Option.map ~f:Coclobas.to_service t.coclobas;
+    Option.map ~f:Postgres.to_service t.db;
+    Option.map ~f:Ketrew_server.to_service t.ketrew;
+    Option.map ~f:Tlstunnel.to_service t.tlstunnel;
+  ] |> Docker_compose.Configuration.make
+
+module Run = struct
+
+  let on_node ?(name = "deployment-run") t cmd =
+    match t.node.Node.host with
+    | `Gcloud node -> Gcloud_instance.run_on ~name node cmd
+    | `Localhost ->
+      Genspio_edsl.exec ["sh"; "-c"; genspio_to_one_liner ~name cmd]
+
+  let cp_from_node t file_from file_to =
+    match t.node.Node.host with
+    | `Gcloud node ->
+      Gcloud_instance.copy_file node (`On_node file_from) (`Local file_to)
+    | `Localhost ->
+      Genspio_edsl.exec ["cp"; file_from; file_to]
+  let cp_to_node t file_from file_to =
+    match t.node.Node.host with
+    | `Gcloud node ->
+      Gcloud_instance.copy_file node (`Local file_from) (`On_node file_to)
+    | `Localhost ->
+      Genspio_edsl.exec ["cp"; file_from; file_to]
+
+  let ensure_node t =
+    let open Node in
+    let create_directories =
+      let open Genspio_edsl in
+      List.map t.node.properties ~f:begin function
+      | `Has_directory (path, `All_rwx) ->
+        [
+          exec ["mkdir"; "-p"; "-m"; "777"; path];
+          (* If the dir already exists `mkdir -m` is not enough: *)
+          exec ["chmod"; "777"; path];
+        ]
+      end
+      |> List.concat
+      |> seq_succeeds_or
+        ~clean_up:[fail] ~name:"Creating the node's local-directories"
+    in
+    match t.node.host with
+    | `Gcloud node ->
+      run_genspio Genspio_edsl.(seq [
+          Gcloud_instance.ensure node;
+          on_node t create_directories;
+        ])
+    | `Localhost ->
+      run_genspio Genspio_edsl.(seq [
+          create_directories;
+        ])
+
+  let destroy_node t =
+    let open Genspio_edsl in
+    match t.node.Node.host with
+    | `Gcloud node ->
+      seq [
+        sayf "Shutting down the GCHost...";
+        Gcloud_instance.destroy node;
+      ]
+    | `Localhost ->
+      nop
+
+
+  let only_gcloud_node ~msg t f =
+    match t.node.Node.host with
+    | `Gcloud node -> f node
+    | `Localhost ->
+      ksprintf failwith
+        "The feature “%s” is only available on GCloud instances"
+        msg
+
+  let optional opt f =
+    match opt with
+    | None -> ()
+    | Some o -> f o
+
+  let use_sudo t =
+    match t.node.Node.host with
+    | `Gcloud _ -> true
+    | `Localhost -> false
+
+  let docker_compose_command ?with_software ?save_output t more =
+    let cmd =
+      Docker_compose.make_command ?save_output ~use_sudo:(use_sudo t)
+        ?with_software ~compose_config:(compose_configuration t)
+        ~tmp_dir:"/tmp/coclotest" more in
+    cmd
+
+  let docker_compose_get_container_id t ?with_software ~container =
+    let open Genspio_edsl in
+    let tmp = tmp_file  "container-id" in
+    object
+      method name = container
+      method make =
+        seq [
+          tmp#set (string "");
+          docker_compose_command ?with_software ~save_output:(tmp#path)
+            t ["ps"; "-q"; container];
+        ]
+      method get =
+        (tmp#get >> exec ["tr"; "-d"; "\\n"] |> output_as_string)
+    end
+
+
+  let docker_compose t more =
+    docker_compose_command t more |> on_node t |> run_genspio
+
+  let docker_command t more =
+    let open Genspio_edsl in
+    (if use_sudo t then ["sudo"] else [])
+    @ ["docker"]
+    @ more
+    |> exec
+
+  let get_file_from_container t ~container_id
+      ~container_path ~node_path ~local_path =
+    let open Genspio_edsl in
+    seq [
+      container_id#make;
+      sayl "Getting backup from %s container (`%s`) to host."
+        [string container_id#name; container_id#get];
+      call (
+        (if use_sudo t then [string "sudo"] else [])
+        @ [string "docker"]
+        @ [string "cp"; string_concat [container_id#get; string ":";
+                                       string container_path];
+           string node_path]
+      );
+    ] |> on_node t |> run_genspio ~name:"copy-container-to-node";
+    seq [
+      sayf "Getting Node:%S to %S" node_path local_path;
+      cp_from_node t node_path local_path;
+    ] |> run_genspio ~name:"get-file-locally";
+    ()
+
+  let up t =
+    let open Genspio_edsl in
+    ensure_node t;
+    optional t.dns begin fun dns ->
+      only_gcloud_node ~msg:"Setting GCloud DNS name" t (fun node ->
+          Gcloud_dns.setup ~node dns;
+        )
+    end;
+    optional t.letsencrypt begin fun letsencrypt ->
+      on_node t (
+        letsencrypt#ensure
+          ~before_generation:(
+            docker_compose_command t  ["kill"; "tlstun"]
+          )
+      ) |> run_genspio ~name:"letsencrypt-ensure" ~returns:0;
+    end;
+    (* ignore (failwith "STOP"); *)
+    run_genspio ~name:"deploy-up" (
+      on_node t (
+        seq [
+          Docker_compose.ensure_software;
+          begin match t.extra_nfs with
+          | Some nfs ->
+            exec [ (* We use the `gcoudnfs` script in the coclobas container *)
+              "sudo"; "docker"; "run"; "hammerlab/coclobas";
+              "sh"; "-c";
+              genspio_to_one_liner ~name:"ensure-nfs"
+                (Nfs.Fresh.ensure nfs);
+            ]
+          | None -> nop
+          end;
+          docker_compose_command t ["up"; "-d"]
+        ]
+      );
+    )
+
+  let node_ip_address t =
+    match t.node.Node.host with
+    | `Gcloud node -> `External (Gcloud_instance.external_ip node)
+    | `Localhost -> `Local
+
+
+
+  let status t =
+    let open Genspio_edsl in
+    let docker_compose_status_cmd =
+      seq [
+        sayf "Getting `docker-compose ps`:";
+        docker_compose_command t ["ps"];
+        sayf "Getting `docker ps -s`:";
+        docker_command t ["ps"; "-s"];
+        sayf "Getting `docker stats` snapshot:";
+        docker_command t ["stats"; "--no-stream"];
+      ] in
+    let coclobas_status_cmd =
+      Option.value_map t.coclobas ~default:nop ~f:(fun c ->
+          let o =
+            exec ["curl"; "-s"; "http://127.0.0.1:8082/status"]
+            |> output_as_string in
+          seq [
+            sayf "Getting Coclobas status:";
+            call [string "printf"; string "Curl coclobas/status says: %s\n"; o]
+          ]) in
+    let ketrew_status_cmd =
+      Option.value_map t.ketrew ~default:nop ~f:(fun kserver ->
+          let curl cmd =
+            call ([string "curl"; string "-k"; string "-s"] @ cmd) in
+          seq [
+            sayf "Getting Ketrew Server Status:";
+            begin
+              let message =
+                Ketrew_pure.Protocol.Up_message.serialize `Get_server_status in
+              curl [string "-d"; string message;
+                    Ketrew_server.make_url kserver ~service:`Api `Local]
+            end;
+            sayf "Ketrew GUI:";
+            Ketrew_server.make_url kserver ~service:`Gui
+              (node_ip_address t) >> exec ["cat"];
+            exec ["printf"; "\\n"];
+            Option.value_map t.dns ~default:nop ~f:(fun dns ->
+                Ketrew_server.make_url kserver ~service:`Gui
+                  (`External (string dns.Gcloud_dns.name))
+                >> exec ["cat"]);
+            exec ["printf"; "\\n"];
+          ]) in 
+    seq [
+      on_node t docker_compose_status_cmd;
+      on_node t coclobas_status_cmd;
+      on_node t ketrew_status_cmd;
+      Option.value_map t.ketrew ~default:nop ~f:(fun kserver ->
+          begin
+            let cmd =
+              List.map (Ketrew_server.all_nfs_witnesses kserver)
+                ~f:(fun path -> exec ["ls"; "-l"; path])
+              |> seq
+            in
+            on_node t @@ seq [
+              sayf "Checking NFS-mounts on `kserver`:";
+              docker_compose_command t
+                ["exec"; "kserver"; "sh"; "-c";
+                 genspio_to_one_liner ~name:"check-nfs-mount" cmd];
+            ]
+          end);
+    ] |> run_genspio
+
+  let down t =
+    let open Genspio_edsl in
+    optional t.dns begin fun dns ->
+      only_gcloud_node ~msg:"DNS name destruction" t begin fun node ->
+        Gcloud_dns.clean_up ~node dns;
+      end;
+    end;
+    run_genspio (seq [
+        Option.value_map t.extra_nfs ~default:nop ~f:(fun enfs ->
+            seq [
+              sayf "Destroying the Extra-NFS server...";
+              on_node t (
+                if_seq
+                  (Gcloud_instance.instance_is_up (Nfs.Fresh.instance enfs))
+                  ~t:[
+                    exec [
+                      "sudo"; "docker"; "run"; "hammerlab/coclobas";
+                      "sh"; "-c";
+                      genspio_to_one_liner ~name:"destroy-nfs"
+                        (Nfs.Fresh.destroy enfs);
+                    ]
+                  ]
+                  ~e:[sayf "NFS extra server is already down"]
+              );
+            ]);
+        Option.value_map t.gke_cluster ~default:nop ~f:(fun kube ->
+            seq [
+              sayf "Shutting down the cluster...";
+              on_node t
+                (seq_succeeds_or
+                   ~name:"Destruction-of-the-Kube-cluster"
+                   [Gke_cluster.destroy kube]
+                   ~clean_up:[
+                     sayf "Destruction-of-the-Kube-cluster failed but we keep going \
+                           the destruction of the “GCHost”";
+                   ]);
+            ]);
+        begin match t.node.Node.host with
+        | `Gcloud _ -> (* destroying the whole node gets rid of everything *)
+          destroy_node t
+        | `Localhost ->
+          docker_compose_command t ["down"]
+        end;
+      ])
+
+  let top t =
+    let open Genspio_edsl in
+    run_genspio (seq [
+        on_node t (
+          seq [
+            exec ((if use_sudo t then ["sudo"] else []) @ [ "docker"; "stats"])
+          ]
+        )
+      ])
+
+  module Generate = struct
+
+    let biokepi_machine ?with_script_header t ~path =
+      begin match t.biokepi_machine with
+      | None ->
+        eprintf "No biokepi-machine was configured for %S\n%!" t.name;
+        failwith "Missing biokepi-machine configuration"
+      | Some bm ->
+        printf "Puting biokepi-machine in %s:\n```\n%s\n```\n%!" path
+          (Biokepi_machine_generation.show bm);
+        write_file path
+          (Biokepi_machine_generation.to_ocaml ?with_script_header bm)
+      end
+
+    let ketrew_configuration ?userinfo t ~path =
+      let open Genspio_edsl in
+      let ketrew_url =
+        let kserver = Option.value_exn t.ketrew
+            ~msg:"This deployment does not have a Ketrew server" in
+        match t.dns with
+        | None ->
+          Ketrew_server.make_url ?userinfo kserver ~service:`Gui
+            (node_ip_address t)
+        | Some dns ->
+          Ketrew_server.make_url ?userinfo kserver ~service:`Gui
+            (`External (string dns.Gcloud_dns.name))
+      in
+      run_genspio (seq [
+          call [string "ketrew"; string "init";
+                string "--configuration-path"; string path;
+                string "--just-client"; ketrew_url;];
+        ])
+
+  end
+
+  let prepare ?userinfo t =
+    let prep =
+      Option.value_exn t.preparation
+        ~msg:"Deployment does not have a preparation step" in
+    let wf = Data_preparation.to_workflow prep in
+    let kconfdir = Filename.get_temp_dir_name () // "kconf" in
+    Generate.ketrew_configuration ?userinfo t ~path:kconfdir;
+    let override_configuration =
+      Ketrew.Configuration.load_exn ~and_apply:true (`In_directory kconfdir) in
+    Ketrew.Client.submit_workflow wf ~override_configuration
+
+  let test_biokepi_machine ?userinfo t =
+    let biomachine =
+      Biokepi_machine_generation.to_ocaml ~with_script_header:true
+        (Option.value_exn t.biokepi_machine
+           ~msg:"missing biokepi-machine definition") in
+    let workflow =
+      {ocaml|
+let workflow =
+   let open Biokepi in
+   let open KEDSL in
+   let program =
+     Program.(sh "du -sh $HOME")
+   in
+   let name = "Test of the biokepi machine" in
+   let make = Machine.run_program ~name biokepi_machine program in
+   (* let host = Machine.(as_host biokepi_machine) in *)
+   workflow_node ~name without_product
+     ~make
+|ocaml} in
+    let kconfdir = Filename.get_temp_dir_name () // "kconf" in
+    Generate.ketrew_configuration ?userinfo t ~path:kconfdir;
+    let submission =
+      sprintf
+{ocaml|
+let () =
+  let override_configuration =
+    Ketrew.Configuration.load_exn ~and_apply:true (`In_directory %S) in
+Ketrew.Client.submit_workflow workflow ~override_configuration
+|ocaml} kconfdir in
+    write_file "/tmp/script.ml"
+      (sprintf "%s\n\n%s\n\n%s\n"
+         biomachine workflow submission);
+    cmdf "ocaml /tmp/script.ml"
+
+  let psql t ~args =
+    let db, container =
+      match t.db, t.coclobas, t.ketrew with
+      | None, _, _ ->
+        ksprintf failwith "Deployment %S does not have a Postres database." t.name
+      | Some db, Some pn, _ -> db, Coclobas.name pn
+      | Some db, None, Some k -> db, Ketrew_server.name k
+      | _, _, _ ->
+        ksprintf failwith "Can't find a container to run `psql` (Deployment %S)"
+          t.name
+    in
+    let open Genspio_edsl in
+    let psql_cmd =
+      let psqlrc = tmp_file "psqlrc" in
+      seq [
+        psqlrc#set (string "SET bytea_output = 'escape';");
+        setenv (string "PAGER") (string "cat");
+        setenv (string "PSQLRC") psqlrc#path;
+        exec (
+          ["psql"; "--pset=pager=off"]
+          @ args
+          @ [Postgres.to_uri db |> Uri.to_string]
+        );
+      ] in
+    seq [
+      docker_compose_command t ["exec"; container; "bash"; "-c";
+                                genspio_to_one_liner ~name:"psql_cmd" psql_cmd]
+    ] |> on_node t |> run_genspio
+
+  let coclobas_client t ~args =
+    let coclo =
+      Option.value_exn ~msg:"No Coclobas server configured" t.coclobas in
+    docker_compose t (
+      [
+        "exec"; Coclobas.name coclo;
+        "opam";
+        "conf";
+        "exec";
+        "--";
+        "coclobas"; "client"; "--server"; Coclobas.url_for_local_client coclo;
+      ]
+      @ args)
+
+  let backup_postgres t ~path =
+    let db, container =
+      match t.db with
+      | None ->
+        ksprintf failwith "Deployment %S does not have a Postres database." t.name
+      | Some db -> db, Postgres.container_name db
+    in
+    let open Genspio_edsl in
+    let container_id =
+      docker_compose_get_container_id t ~with_software:false ~container in
+    seq [
+      sayf "Running `pg_dump`";
+      docker_compose_command t
+        ["exec"; container; "pg_dump";
+         "--clean";
+         "--format"; "p";
+         "-f"; "/backup.sql";
+         Postgres.to_uri db |> Uri.to_string;
+        ];
+    ]
+    |> on_node t |> run_genspio ~name:"backup_postgres";
+    get_file_from_container t ~container_id
+      ~container_path:"/backup.sql"
+      ~node_path:"/tmp/tmp-backup.sql"
+      ~local_path:path;
+    (* seq [ *)
+    (*   container_id#make; *)
+    (*   sayl "Getting backup from Postgres container (`%s`) to host." *)
+    (*     [container_id#get]; *)
+    (*   call ( *)
+    (*     (if use_sudo t then [string "sudo"] else []) *)
+    (*     @ [string "docker"] *)
+    (*     @ [string "cp"; string_concat [container_id#get; string ":"; *)
+    (*                                    string "/backup.sql"]; *)
+    (*        string "/tmp/backup.sql"] *)
+    (*   ); *)
+    (* ] *)
+    (* |> on_node t |> run_genspio ~name:"backup_postgres"; *)
+    (* seq [ *)
+    (*   sayf "Getting backup to %S" path; *)
+    (*   cp_from_node t "/tmp/backup.sql" path; *)
+    (* ] |> run_genspio ~name:"get-backup-locally"; *)
+    ()
+
+  let restore_db_backup t ~path =
+    let db, container =
+      match t.db with
+      | None ->
+        ksprintf failwith "Deployment %S does not have a Postres database." t.name
+      | Some db -> db, Postgres.container_name db
+    in
+    let open Genspio_edsl in
+    let container_id =
+      docker_compose_get_container_id t ~with_software:false ~container in
+    let optionally_stop name ~container_name opt =
+      begin match opt with
+      | None -> sayf "Deployment does not have a %s." name
+      | Some cb -> seq [
+          sayf "Stopping the %s." name;
+          docker_compose_command ~with_software:false t
+            ["stop"; container_name cb];
+        ]
+      end |> run_genspio ~name:(sprintf "stop-%s" name) ~returns:0 in
+    optionally_stop "coclobas-server" ~container_name:Coclobas.name t.coclobas;
+    optionally_stop "ketrew-server" ~container_name:Ketrew_server.name t.ketrew;
+    seq [
+      sayf "Getting backup on the node as /tmp/backup.sql";
+      cp_to_node t path "/tmp/backup.sql";
+    ] |> run_genspio ~name:"push-backup-to-node" ~returns:0;
+    seq [
+      container_id#make;
+      sayl "Getting backup on Postgres container (`%s`)."
+        [container_id#get];
+      call (
+        (if use_sudo t then [string "sudo"] else [])
+        @ [string "docker"]
+        @ [
+          string "cp";
+          string "/tmp/backup.sql";
+          string_concat [container_id#get; string ":";
+                         string "/backup-to-restore.sql"];
+        ]
+      );
+    ]
+    |> on_node t |> run_genspio ~name:"put-backup-on-container" ~returns:0;
+    seq [
+      sayf "Running `pg_restore`";
+      seq_succeeds_or ~clean_up:[fail] ~name:"pg-restore" [
+        (*
+          https://www.opsdash.com/blog/postgresql-backup-restore.html
+          https://www.postgresql.org/docs/current/static/app-psql.html
+        *)
+        docker_compose_command ~with_software:false t
+          ["exec"; container; "psql";
+           "--no-psqlrc";
+           "-v"; "ON_ERROR_STOP=1"; "--pset"; "pager=off";
+           "--single-transaction";
+           Postgres.to_uri db |> Uri.to_string;
+           "-f"; "/backup-to-restore.sql";
+          ];
+      ];
+    ]
+    |> on_node t |> run_genspio ~name:"restore_postgres" ~returns:0;
+    seq [
+      docker_compose_command t ["up"; "-d"]
+    ] |> on_node t |> run_genspio ~name:"recall-docker-compose-up" ~returns:0;
+    ()
+
+  let get_coclobas_logs t ~path =
+    let coclo =
+      Option.value_exn t.coclobas
+        ~msg:"This deployment does not have a Coclobas server." in
+    let open Genspio_edsl in
+    let container_path = "/tmp" // Filename.basename path in
+    let tar_cmd =
+      seq [
+        exec ["cd"; Coclobas.logs_path coclo];
+        exec ["tar"; "cfz"; container_path; "."];
+      ] in
+    seq [
+      sayf "Running `tar cvfz`";
+      seq_succeeds_or ~clean_up:[fail] ~name:"tar-coclo-logs" [
+        docker_compose_command ~with_software:false t
+          ["exec"; Coclobas.name coclo;
+           "bash"; "-c"; genspio_to_one_liner tar_cmd];
+      ];
+    ] |> on_node t |> run_genspio ~name:"tar-coclo-logs" ~returns:0;
+    let container_id =
+      docker_compose_get_container_id t ~with_software:false
+        ~container:(Coclobas.name coclo) in
+    get_file_from_container t ~container_id
+      ~container_path
+      ~node_path:container_path
+      ~local_path:path;
+    ()
+
+  let get_ketrew_logs t ~path =
+    let kserver =
+      Option.value_exn t.ketrew
+        ~msg:"This deployment does not have a Ketrew server." in
+    let open Genspio_edsl in
+    let container_path = "/tmp" // Filename.basename path in
+    let tar_cmd =
+      seq [
+        exec ["cd"; Ketrew_server.logs_path kserver];
+        exec ["sudo"; "chmod"; "-R"; "a+rw"; "."];
+        exec ["tar"; "cfz"; container_path; "."];
+      ] in
+    seq [
+      sayf "Running `tar cvfz`";
+      seq_succeeds_or ~clean_up:[fail] ~name:"tar-kserver-logs" [
+        docker_compose_command ~with_software:false t
+          ["exec"; Ketrew_server.name kserver;
+           "bash"; "-c"; genspio_to_one_liner tar_cmd];
+      ];
+    ] |> on_node t |> run_genspio ~name:"tar-kserver-logs" ~returns:0;
+    let container_id =
+      docker_compose_get_container_id t ~with_software:false
+        ~container:(Ketrew_server.name kserver) in
+    get_file_from_container t ~container_id
+      ~container_path
+      ~node_path:container_path
+      ~local_path:path;
+    ()
+
+end
+
