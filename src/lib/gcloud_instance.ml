@@ -139,5 +139,6 @@ let copy_file t file_from file_to =
 
 
 let run_on ?(name = "cmd") node cmd =
-  let name = sprintf "%s-on-%s" name node.name in
-  run_command node (genspio_to_one_liner ~name cmd)
+  (* let name = sprintf "%s-on-%s" name node.name in *)
+  run_command ~use_script:true node 
+    (Genspio.Language.to_many_lines cmd)

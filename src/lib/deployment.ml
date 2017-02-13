@@ -57,7 +57,9 @@ module Run = struct
     match t.node.Node.host with
     | `Gcloud node -> Gcloud_instance.run_on ~name node cmd
     | `Localhost ->
-      Genspio_edsl.exec ["sh"; "-c"; genspio_to_one_liner ~name cmd]
+      let tmp = Filename.temp_file "secotrec" "script.sh" in
+      write_file tmp ~content:(Genspio.Language.to_many_lines cmd);
+      Genspio_edsl.exec ["sh"; tmp]
 
   let cp_from_node t file_from file_to =
     match t.node.Node.host with
