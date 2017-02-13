@@ -42,6 +42,7 @@ module Mount = struct
     |> String.split ~on:(`Character ':')
     |> List.map ~f:(fun csv ->
         String.split ~on:(`Character ',') csv
+        |> List.map ~f:(String.strip)
         |> begin function
         | server :: remote_path :: witness :: mount_point :: [] ->
           make ~server ~remote_path ~witness ~mount_point

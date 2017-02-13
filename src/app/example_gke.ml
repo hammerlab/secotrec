@@ -26,7 +26,7 @@ let configuration =
         ~help:"Set the size of the storage (in GiB) of the fresh NFS server \
                created by the deployment.";
       env "nfs_mounts"
-        ~example:"my-nfs-server-01-vm,/nfs-pool,.tmp/witness,/nfs01:\\\n\
+        ~example:"my-nfs-server-01-vm,/nfs-pool,.tmp/witness,/nfs01:\n\
                   nfs-42-vm,/nfs-pool,local/path/some/file,/nfs42"
         ~help:"List of additional NFS servers to mount on the Ketrew server \n\
                and on Coclobas' Kubernernetes jobs.\n\
