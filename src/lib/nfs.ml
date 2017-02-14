@@ -65,6 +65,8 @@ module Fresh = struct
     reuse_data_disk: string option;
   } [@@deriving make]
 
+
+  let name t = t.name
   let vm_name t = t.instance.Gcloud_instance.name
   let disk_name t =
     Option.value t.reuse_data_disk ~default:(t.name ^ "-pdisk")

@@ -22,9 +22,10 @@ let configuration =
            Please use the `bcrypt` hash (others may not work with nginx by default)";
     ];
     section "NFS Servers" [
-      env "extra_nfs_size" ~default:"2000"
-        ~help:"Set the size of the storage (in GiB) of the fresh NFS server \
-               created by the deployment.";
+      env "extra_nfs_servers" ~default:"((extranfs ((size 5000))))"
+        ~example:Deployment.Extra_nfs_server.sexp_syntax_example
+        ~help:(sprintf "Describe additional NFS servers to setup.\n%s"
+                 Deployment.Extra_nfs_server.sexp_syntax_help);
       env "nfs_mounts"
         ~example:"my-nfs-server-01-vm,/nfs-pool,.tmp/witness,/nfs01:\n\
                   nfs-42-vm,/nfs-pool,local/path/some/file,/nfs42"
@@ -95,6 +96,8 @@ let configuration =
       end;
   ]
 
+
+
 let example_1 () =
   let conf n = Configuration_dot_env.get_value_exn configuration n in
   let conf_opt n = Configuration_dot_env.get_exn configuration n in
@@ -119,17 +122,12 @@ let example_1 () =
   let coclo =
     Coclobas.make (`GKE cluster) ~db ~opam_pin:[coclo_pin] in
   let auth_token = conf  "auth_token" in
-  let extra_nfs =
-    Nfs.Fresh.make (prefix ^ "-extranfs")
-      ~instance:(
-        Gcloud_instance.make (prefix ^ "-extranfs-vm")
-          ~zone ~machine_type:(`Google_cloud `Highmem_8))
-      ~size:(`GB 5_000)
-  in
-  let extra_nfs_mount = "/extranfs" in
+  let extra_nfs_servers =
+    conf "extra_nfs_servers"
+    |> Deployment.Extra_nfs_server.parse_sexp ~zone ~prefix in
   let nfs_mounts =
-    Nfs.Fresh.mount extra_nfs ~mount_point:extra_nfs_mount
-    :: Option.value_map ~default:[] (conf_opt "nfs_mounts")
+    List.map extra_nfs_servers ~f:Deployment.Extra_nfs_server.to_mount
+    @ Option.value_map ~default:[] (conf_opt "nfs_mounts")
       ~f:Nfs.Mount.of_colon_separated_csv
   in
   let ketrew =
@@ -163,9 +161,13 @@ let example_1 () =
       ~backend_port
       ~frontend_port:8443
   in
+  let leading_extra_nfs =
+    List.hd extra_nfs_servers
+    |> Option.value_exn ~msg:"I need at least one NFS server"
+    |> Deployment.Extra_nfs_server.mount_point in
   let biokepi_machine =
     Biokepi_machine_generation.make
-      ~default_work_dir:(extra_nfs_mount // "workdir")
+      ~default_work_dir:(leading_extra_nfs // "workdir")
       ~coclobas:coclo
       ~mounts:(List.map nfs_mounts ~f:(fun nfsm -> `Nfs_kube nfsm))
       "The-CocloKetrew-Machine" in
@@ -174,7 +176,7 @@ let example_1 () =
     make [
       download
         "https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37decoy_20160927.tgz"
-        ~in_directory:(extra_nfs_mount // "workdir/reference-genome");
+        ~in_directory:(leading_extra_nfs // "workdir/reference-genome");
     ] in
   Deployment.make "Ex-almost-full"
     ~node:(Deployment.Node.gcloud node)
@@ -184,7 +186,7 @@ let example_1 () =
     ~gke_cluster:cluster
     ~db
     ~dns
-    ~extra_nfs
+    ~extra_nfs_servers
     ~ketrew
     ~coclobas:coclo
     ~letsencrypt

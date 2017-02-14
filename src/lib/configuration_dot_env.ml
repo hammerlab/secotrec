@@ -47,8 +47,8 @@ let generate t ~path =
            | None -> e
            | Some v -> sprintf "'%s'" e in
          match example, default with
-         | _, Some d -> value d
          | Some e, _ -> value e
+         | _, Some d -> value d
          | None, None -> "''");
       comment_line "";
       comment "%s" help;

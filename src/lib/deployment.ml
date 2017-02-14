@@ -23,13 +23,99 @@ module Node = struct
   let gcloud ?properties g = make (`Gcloud g) ?properties
 end
 
+module Extra_nfs_server = struct
+  type t = {
+    server: Nfs.Fresh.t;
+    mount_point: string;
+  } [@@deriving make]
+
+  let mount_point t = t.mount_point
+  let to_mount {server; mount_point} =
+    Nfs.Fresh.mount server ~mount_point
+
+  let parse_sexp ~prefix ~zone str =
+    let open Sexplib.Sexp in
+    let fail ?sexp ?expect msg =
+      ksprintf failwith "Error while parsing NFS server definitions: %s %s%s"
+        msg
+        (Option.value_map sexp ~default:""
+           ~f:(fun s -> sprintf "Got `%s`  " (to_string s)))
+        (Option.value_map expect ~default:"" ~f:(sprintf "Expecting `%s` "))
+    in
+    let parse_one =
+      function
+      | List [Atom name; List params] ->
+        let identity e = e in
+        let get_string tag f =
+          List.find_map params ~f:(function
+            | List [Atom n; Atom t] when n = tag -> Some (f t)
+            | _ -> None) in
+        let get_int tag f =
+          match get_string tag identity |> Option.map ~f:Int.of_string with
+          | Some (Some v) -> Some (f v)
+          | Some None ->
+            fail ~expect:(sprintf "(%s <integer>)" tag) "Size parsing failed"
+          | None -> None
+        in
+        let reuse_data_disk = get_string "reuse-data-disk" identity in
+        (* let machine_type = get_string "machine-type" identity in *)
+        let size =
+          get_int "size" (fun s -> `GB s) |> Option.value ~default:(`GB 5000) in
+        let mount_point =
+          get_string "mount-point" identity
+          |> Option.value ~default:("/" // name) in
+        let server =
+          Nfs.Fresh.make (sprintf "%s-%s" prefix name)
+            ?reuse_data_disk
+            ~instance:(
+              Gcloud_instance.make (sprintf "%s-%s-%s" prefix name "-vm")
+                ~zone ~machine_type:(`Google_cloud `Highmem_8))
+            ~size in
+        make ~server ~mount_point
+      | other ->
+        fail ~sexp:other ~expect:"(<name> <parameters-list>)"
+          "Can't recognize the S-Expression pattern"
+    in
+    match of_string str with
+    | List l ->
+      List.map l ~f:parse_one 
+    | other ->
+      fail ~sexp:other ~expect:"(<server-definition-list>)"
+        "Can't recognize the S-Expression pattern"
+
+  let sexp_syntax_help =
+    "Syntax: (<server-list>) where each server is:\n\
+     * (<name> <parameter-list>), parameters can be \n\
+    \     * (size <integer>): Set the size of the storage (in GiB) \n\
+    \       of the fresh NFS server.\n\
+    \     * (reuse-data-disk <gcloud-name>): Use an existing disk\n\
+    \       (and don't delete in when taking the deployment down).\n\
+    \     * (mount-point <path>): Mount the fresh NFS at that path \n\
+    \       on deployed services (default: /<name>).\n\
+    "
+
+  let sexp_syntax_example =
+    "(\n\
+    \   ;; 10 TB fresh NFS server mounted at `/nfs01`:\n\
+    \   (nfs01 (\n\
+    \      (size 10000)))\n\
+    \   ;; Use a GCloud disk for a fresh NFS server:\n\
+    \   (nfs02 (\n\
+    \      (reuse-data-disk my-gcloud-storage)))\n\
+    \   ;; Create a fresh NFS server and specify the mount-point:\n\
+    \   (nfs03 (\n\
+    \      (size 10000)\n\
+    \      (mount-point /custommountpoint)))\n\
+     )"
+end
+
 type t = {
   node: Node.t;
   (* compose_configuration : Docker_compose.Configuration.t; *)
   gke_cluster : Gke_cluster.t option;
   db : Postgres.t option;
   dns : Gcloud_dns.t option;
-  extra_nfs : Nfs.Fresh.t option; (* TODO: switch to a list *)
+  extra_nfs_servers : Extra_nfs_server.t list;
   ketrew : Ketrew_server.t option;
   coclobas : Coclobas.t option;
   letsencrypt : Letsencrypt.t option;
@@ -202,21 +288,27 @@ module Run = struct
       ) |> run_genspio ~name:"letsencrypt-ensure" ~returns:0;
     end;
     (* ignore (failwith "STOP"); *)
-    run_genspio ~name:"deploy-up" (
+    run_genspio ~name:"nfs-up" ~returns:0 (
+      on_node t (
+        seq_succeeds_or ~name:"Setup-NFS-servers"
+          ~clean_up:[fail]
+          (
+            Docker_compose.ensure_software
+            :: List.map t.extra_nfs_servers ~f:(fun nfs ->
+                exec [ (* We use the `gcoudnfs` script in the coclobas container *)
+                  "sudo"; "docker"; "run"; "hammerlab/coclobas";
+                  "sh"; "-c";
+                  genspio_to_one_liner ~name:"ensure-nfs"
+                    (Nfs.Fresh.ensure nfs.Extra_nfs_server.server);
+                ]
+              )
+          )
+      )
+    );
+    run_genspio ~name:"deploy-up" ~returns:0 (
       on_node t (
         seq [
-          Docker_compose.ensure_software;
-          begin match t.extra_nfs with
-          | Some nfs ->
-            exec [ (* We use the `gcoudnfs` script in the coclobas container *)
-              "sudo"; "docker"; "run"; "hammerlab/coclobas";
-              "sh"; "-c";
-              genspio_to_one_liner ~name:"ensure-nfs"
-                (Nfs.Fresh.ensure nfs);
-            ]
-          | None -> nop
-          end;
-          docker_compose_command t ["up"; "-d"]
+          docker_compose_command ~with_software:false t ["up"; "-d"]
         ]
       );
     )
@@ -298,10 +390,12 @@ module Run = struct
       end;
     end;
     run_genspio (seq [
-        Option.value_map t.extra_nfs ~default:nop ~f:(fun enfs ->
+        seq (
+          List.map t.extra_nfs_servers ~f:(fun nfs ->
             seq [
               sayf "Destroying the Extra-NFS server...";
               on_node t (
+                let enfs = nfs.Extra_nfs_server.server in
                 if_seq
                   (Gcloud_instance.instance_is_up (Nfs.Fresh.instance enfs))
                   ~t:[
@@ -314,7 +408,7 @@ module Run = struct
                   ]
                   ~e:[sayf "NFS extra server is already down"]
               );
-            ]);
+            ]));
         Option.value_map t.gke_cluster ~default:nop ~f:(fun kube ->
             seq [
               sayf "Shutting down the cluster...";
