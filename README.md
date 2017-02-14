@@ -30,7 +30,7 @@ For now we need a few packages pinned:
     opam pin -n add ketrew https://github.com/hammerlab/ketrew.git
     opam pin -n add biokepi https://github.com/hammerlab/biokepi.git
     opam pin -n add genspio https://github.com/hammerlab/genspio.git
-    opam pin -n add secotrec https://github.com:hammerlab/secotrec-private.git
+    opam pin -n add secotrec https://github.com:hammerlab/secotrec.git
     opam upgrade
     opam install tls secotrec biokepi
 
