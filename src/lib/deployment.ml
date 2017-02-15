@@ -290,19 +290,17 @@ module Run = struct
     (* ignore (failwith "STOP"); *)
     run_genspio ~name:"nfs-up" ~returns:0 (
       on_node t (
-        seq_succeeds_or ~name:"Setup-NFS-servers"
-          ~clean_up:[fail]
-          (
-            Docker_compose.ensure_software
-            :: List.map t.extra_nfs_servers ~f:(fun nfs ->
-                exec [ (* We use the `gcoudnfs` script in the coclobas container *)
-                  "sudo"; "docker"; "run"; "hammerlab/coclobas";
-                  "sh"; "-c";
-                  genspio_to_one_liner ~name:"ensure-nfs"
-                    (Nfs.Fresh.ensure nfs.Extra_nfs_server.server);
-                ]
-              )
-          )
+        seq (
+          Docker_compose.ensure_software
+          :: List.map t.extra_nfs_servers ~f:(fun nfs ->
+              exec [ (* We use the `gcoudnfs` script in the coclobas container *)
+                "sudo"; "docker"; "run"; "hammerlab/coclobas";
+                "sh"; "-c";
+                genspio_to_one_liner ~name:"ensure-nfs"
+                  (Nfs.Fresh.ensure nfs.Extra_nfs_server.server);
+              ]
+            )
+        )
       )
     );
     run_genspio ~name:"deploy-up" ~returns:0 (
