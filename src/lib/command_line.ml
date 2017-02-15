@@ -70,8 +70,8 @@ let configuration_commands configuration =
           end
           $ Arg.(required
                  @@ pos 0 (some string) None
-                 @@ info []
-                   ~doc:"Command to use as browser.")
+                 @@ info [] ~docv:"PATH"
+                   ~doc:"Path of the configuration file.")
         ) in
   let print_config =
     argless_sub_command "print-configuration"
@@ -155,8 +155,8 @@ let deployment_commands (deployment : unit -> Deployment.t) =
           $ user_info_term
           $ Arg.(required
                  @@ pos 0 (some string) None
-                 @@ info []
-                   ~doc:"Path to the configuration directory")
+                 @@ info [] ~docv:"PATH"
+                   ~doc:"Path to the configuration directory.")
         ) in
   let biokepi_machine =
     sub_command
@@ -175,7 +175,7 @@ let deployment_commands (deployment : unit -> Deployment.t) =
                          directives.")
           $ Arg.(required
                  @@ pos 0 (some string) None
-                 @@ info []
+                 @@ info [] ~docv:"PATH"
                    ~doc:"Path to the .ml file.")
         ) in
   let preparation_workflow =
@@ -211,8 +211,9 @@ let deployment_commands (deployment : unit -> Deployment.t) =
           $ deployment_arg
           $ Arg.(required
                  @@ pos 0 (some string) None
-                 @@ info []
-                   ~doc:"Path of the backup file to write.")
+                 @@ info [] ~docv:"PATH"
+                   ~doc:"Path of the backup file to write \
+                         (`.sql` extension recommended).")
         ) in
   let restore_database_backup =
     sub_command
@@ -225,8 +226,8 @@ let deployment_commands (deployment : unit -> Deployment.t) =
           $ deployment_arg
           $ Arg.(required
                  @@ pos 0 (some string) None
-                 @@ info []
-                   ~doc:"Path to the backup file.")
+                 @@ info [] ~docv:"PATH"
+                   ~doc:"Path to the backup file (should be a `.sql`).")
         ) in
   let coclobas_logs =
     sub_command
@@ -239,7 +240,7 @@ let deployment_commands (deployment : unit -> Deployment.t) =
           $ deployment_arg
           $ Arg.(required
                  @@ pos 0 (some string) None
-                 @@ info []
+                 @@ info [] ~docv:"PATH"
                    ~doc:"Path to the tar-gz file.")
         ) in
   let ketrew_logs =
@@ -253,7 +254,7 @@ let deployment_commands (deployment : unit -> Deployment.t) =
           $ deployment_arg
           $ Arg.(required
                  @@ pos 0 (some string) None
-                 @@ info []
+                 @@ info [] ~docv:"PATH"
                    ~doc:"Path to the tar-gz file.")
         ) in
   [
