@@ -119,8 +119,11 @@ let example_1 () =
   let coclo_pin =
     Opam.Pin.make "coclobas"
       ~pin:"https://github.com/hammerlab/coclobas.git#master" in
+  let ketrew_pin =
+    Opam.Pin.make "ketrew"
+      ~pin:"https://github.com/hammerlab/ketrew.git#master" in
   let coclo =
-    Coclobas.make (`GKE cluster) ~db ~opam_pin:[coclo_pin] in
+    Coclobas.make (`GKE cluster) ~db ~opam_pin:[coclo_pin; ketrew_pin] in
   let auth_token = conf  "auth_token" in
   let extra_nfs_servers =
     conf "extra_nfs_servers"
@@ -132,7 +135,8 @@ let example_1 () =
   in
   let ketrew =
     Ketrew_server.make
-      ~opam_pin:[coclo_pin] "kserver" ~auth_token ~db ~nfs_mounts in
+      ~opam_pin:[coclo_pin; ketrew_pin]
+      "kserver" ~auth_token ~db ~nfs_mounts in
   let proxy_port = 8842 in
   let proxy_nginx =
     Option.map (conf_opt "htpasswd") ~f:(fun htpasswd ->
