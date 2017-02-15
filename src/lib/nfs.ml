@@ -112,7 +112,7 @@ module Fresh = struct
             ];
           ]
         ];
-      sayf "Waiting for NFS-%s to be really avaialable" t.name;
+      sayf "Waiting for NFS-%s to be really available" t.name;
       seq_succeeds_or
         ~name:(sprintf "Waiting-for-NFS-%s-to-be-up" t.name)
         ~clean_up:[fail] [
