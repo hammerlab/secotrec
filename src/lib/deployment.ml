@@ -68,7 +68,7 @@ module Extra_nfs_server = struct
           Nfs.Fresh.make (sprintf "%s-%s" prefix name)
             ?reuse_data_disk
             ~instance:(
-              Gcloud_instance.make (sprintf "%s-%s-%s" prefix name "-vm")
+              Gcloud_instance.make (sprintf "%s-%s-%s" prefix name "vm")
                 ~zone ~machine_type:(`Google_cloud `Highmem_8))
             ~size in
         make ~server ~mount_point
