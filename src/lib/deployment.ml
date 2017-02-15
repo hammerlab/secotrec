@@ -288,7 +288,7 @@ module Run = struct
       ) |> run_genspio ~name:"letsencrypt-ensure" ~returns:0;
     end;
     (* ignore (failwith "STOP"); *)
-    run_genspio ~name:"nfs-up" ~returns:0 (
+    run_genspio ~name:"nfs-up" (
       on_node t (
         seq (
           Docker_compose.ensure_software
