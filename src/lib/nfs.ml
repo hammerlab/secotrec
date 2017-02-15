@@ -97,7 +97,8 @@ module Fresh = struct
         [
           seq_succeeds_or ~name:(sprintf "Creating-NFS-%s" t.name)
             ~clean_up:[fail] [
-            call [
+            call (
+              [
               string "gcloudnfs";
               string "create";
               string "--zone"; string t.instance.Gcloud_instance.zone;
@@ -109,7 +110,10 @@ module Fresh = struct
               string "--data-disk-name"; string (disk_name t);
               string "--data-disk-type"; string "pd-standard";
               string "--data-disk-size"; string (size_gb t);
-            ];
+              ]
+              @ (if t.reuse_data_disk <> None
+                 then [string "--reuse-data-disk"] else [])
+            );
           ]
         ];
       sayf "Waiting for NFS-%s to be really available" t.name;
@@ -142,15 +146,19 @@ module Fresh = struct
 
   let destroy t =
     let open Genspio_edsl in
-    call [
-      string "gcloudnfs";
-      string "destroy";
-      string "--zone"; string t.instance.Gcloud_instance.zone;
-      string "--project"; project;
-      string "--network"; string "default";
-      string "--server-name"; string (vm_name t);
-      string "--data-disk-name"; string (disk_name t);
-    ]
+    call (
+      [
+        string "gcloudnfs";
+        string "destroy";
+        string "--zone"; string t.instance.Gcloud_instance.zone;
+        string "--project"; project;
+        string "--network"; string "default";
+        string "--server-name"; string (vm_name t);
+        string "--data-disk-name"; string (disk_name t);
+      ]
+      @ (if t.reuse_data_disk <> None
+         then [string "--reuse-data-disk"] else [])
+    )
 
 
   let mount t ~mount_point =
