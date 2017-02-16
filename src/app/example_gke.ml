@@ -46,15 +46,18 @@ let configuration =
         ~help:"Let's Encrypt wants an email address to associate with\
                the TLS certificate";
     ];
-    section "Ketrew/Coclobas" [
-      env "auth_token"
-        ~required:true
-        ~example:"ddefefeijdenjcndijdlei9180128012"
-        ~help:"Authentication token for the Ketrew UIs & API, just a random \
-               string.";
-      env "cluster_max_nodes" ~default:"15"
-        ~help:"The maximal size of the Kubernetes cluster.";
-    ];
+    section "Ketrew/Coclobas"
+      begin [
+        env "auth_token"
+          ~required:true
+          ~example:"ddefefeijdenjcndijdlei9180128012"
+          ~help:"Authentication token for the Ketrew UIs & API, just a random \
+                 string.";
+        env "cluster_max_nodes" ~default:"15"
+          ~help:"The maximal size of the Kubernetes cluster.";
+      ]
+      @ Util.common_opam_pins#configuration
+    end;
     section "Additional Biokepi Configuration"
       ~intro:"The Biokepi Machine generated uses these environment variables.\n\
               The paths can be used to override defaults (where everything is \n\
@@ -116,14 +119,8 @@ let example_1 () =
                   |> Option.value_exn
                     ~msg:"cluster_max_nodes should be an integer")
       (prefix ^ "-kube-cluster") ~zone in
-  let coclo_pin =
-    Opam.Pin.make "coclobas"
-      ~pin:"https://github.com/hammerlab/coclobas.git#master" in
-  let ketrew_pin =
-    Opam.Pin.make "ketrew"
-      ~pin:"https://github.com/hammerlab/ketrew.git#master" in
-  let coclo =
-    Coclobas.make (`GKE cluster) ~db ~opam_pin:[coclo_pin; ketrew_pin] in
+  let opam_pin = Util.common_opam_pins#opam_pins configuration in
+  let coclo = Coclobas.make (`GKE cluster) ~db ~opam_pin in
   let auth_token = conf  "auth_token" in
   let extra_nfs_servers =
     conf "extra_nfs_servers"
@@ -135,8 +132,7 @@ let example_1 () =
   in
   let ketrew =
     Ketrew_server.make
-      ~opam_pin:[coclo_pin; ketrew_pin]
-      "kserver" ~auth_token ~db ~nfs_mounts in
+      ~opam_pin "kserver" ~auth_token ~db ~nfs_mounts in
   let proxy_port = 8842 in
   let proxy_nginx =
     Option.map (conf_opt "htpasswd") ~f:(fun htpasswd ->

@@ -16,17 +16,15 @@ let configuration =
         ~help:"The directory (on the running host) used for BIOKEPI_WORK \
                (default: ~/biokepi-work-dir).";
     ];
-    section "Ketrew/Coclobas Configuration" [
-      env "ketrew_debug_functions" ~required:false
-        ~help:"Run Ketrew with debug `on` for a given comma-separated list of \
-               functions.";
-      env "pin_ketrew"
-        ~help:"Pin Ketrew to a given branch/tag.";
-      env "pin_coclobas"
-        ~help:"Pin Coclobas to a given branch/tag.";
-      env "pin_trakeva"
-        ~help:"Pin Trakeva to a given branch/tag.";
-    ];
+    section "Ketrew/Coclobas Configuration"
+      begin
+        [
+          env "ketrew_debug_functions" ~required:false
+            ~help:"Run Ketrew with debug `on` for a given comma-separated list of \
+                   functions.";
+        ]
+        @ Util.common_opam_pins#configuration
+      end;
   ]
 
 
@@ -61,16 +59,7 @@ let example () =
   let db =
     Postgres.of_uri
       (Uri.of_string "postgresql://pg/?user=postgres&password=kpass") in
-  let opam_pin =
-    let pin_opt repo o =
-      Option.map o ~f:(fun branch ->
-          Opam.Pin.make (Filename.basename repo)
-            ~pin:(sprintf "https://github.com/%s.git#%s" repo branch)) in
-    List.filter_opt [
-      pin_opt "hammerlab/ketrew" @@ conf_opt "pin_ketrew";
-      pin_opt "hammerlab/coclobas" @@ conf_opt "pin_coclobas";
-      pin_opt "smondet/trakeva" @@ conf_opt "pin_trakeva";
-    ] in
+  let opam_pin = Util.common_opam_pins#opam_pins configuration in
   let coclo =
     Coclobas.make (`Local 2) ~db ~opam_pin ~tmp_dir:coclo_tmp_dir in
   let auth_token = "nekot" in
