@@ -112,13 +112,14 @@ let run_command ?(use_script = false) t cmd =
   let open Genspio_edsl in
   begin match use_script with
   | true ->
-    let tmp = Filename.temp_file "secotrec" "script.sh" in
+    let tmp = Filename.temp_file ~temp_dir:"/tmp" "secotrec" "script.sh" in
     write_file tmp ~content:cmd;
     (* printf "Running command on %s, %s\n%!" t.name tmp; *)
     seq [
       seq_succeeds_or ~name:(sprintf "Copying %s" tmp)
         ~clean_up:[fail] [
-        exec ["gcloud"; "compute"; "copy-files"; tmp; sprintf "%s:%s" t.name tmp];
+        exec ["gcloud"; "compute"; "copy-files"; "--zone"; t.zone;
+              tmp; sprintf "%s:%s" t.name tmp];
       ];
       exec ["gcloud"; "compute"; "ssh"; t.name;
             "--zone"; t.zone; "--command"; sprintf "sh %s" tmp ];
