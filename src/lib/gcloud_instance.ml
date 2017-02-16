@@ -12,7 +12,7 @@ type machine_type = [
 type t = {
   name: string [@main];
   scopes: string list [@default ["cloud-platform"]];
-  zone: string [@default "us-east1-c"];
+  zone: string;
   os: [ `Ubuntu_1604 ] [@default `Ubuntu_1604];
   boot_disk_size: [`GB of int] [@default `GB 50];
   machine_type: machine_type [@default `Google_cloud `Small];

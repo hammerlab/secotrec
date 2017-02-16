@@ -1,7 +1,7 @@
 open Common
 
 type t = {zone : string; max_nodes: int; name: string}
-let make ?(max_nodes = 15) ?(zone = "us-east1-c") name =
+let make ?(max_nodes = 15) ~zone name =
   {zone; max_nodes; name}
 let zone {zone; _} = zone
 let name {name; _} = name
