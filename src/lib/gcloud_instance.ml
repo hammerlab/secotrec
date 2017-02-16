@@ -136,7 +136,8 @@ let copy_file t file_from file_to =
     | `Local p -> p
     | `On_node p -> sprintf "%s:%s" t.name p
   in
-  exec ["gcloud"; "compute"; "copy-files"; arg file_from; arg file_to]
+  exec ["gcloud"; "compute"; "copy-files"; "--zone"; t.zone;
+        arg file_from; arg file_to]
 
 
 let run_on ?(name = "cmd") node cmd =
