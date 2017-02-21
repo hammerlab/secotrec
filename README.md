@@ -24,6 +24,10 @@ with
 Install
 -------
 
+If you have an `opam` environment just install secotrec:
+
+### With Opam
+
 For now we need a few packages pinned:
 
     opam pin -n add coclobas https://github.com/hammerlab/coclobas.git
@@ -40,6 +44,17 @@ Notes:
   `test-biokepi-machine` sub-commands).
 - `biokepi` is only used by generated code (biokepi machine and its test).
 
+
+### Dockerized
+
+Get the image and enter the container:
+
+    docker pull hammerlab/secotrec
+    docker run -v /var/run/docker.sock:/var/run/docker.sock -it hammerlab/secotrec bash
+
+If you do not plan to use `secotrec-local` you don't need the
+Docker socket (`-v /var/run/docker.sock:/var/run/docker.sock`),
+see `docker run --help` for more options.
 
 Usage
 -----
@@ -166,7 +181,10 @@ The subcommand `docker-compose` (alias `dc`) forwards its arguments to
 secotrec-gke dc ps
 secotrec-gke dc logs coclo
 secotrec-gke dc exec kserver ps aux
+secotrec-gke get-coclobas-logs somewhere.tar.gz
 ...
+# See:
+secotrec-gke --help
 ```
 
 #### Destroy
