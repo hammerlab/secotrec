@@ -21,7 +21,7 @@ let make ~dns_name ~email : t =
       ensure ~name:"Letsencrypt-ceriticates"
         (file_exists (string cert) &&& file_exists (string key)) [
         should_succeed "Installing-letsencrypt" [
-          exec ["sudo"; "apt-get"; "install"; "--yes"; "letsencrypt"];
+          Apt.install ["letsencrypt"];
         ];
         before_generation;
         should_succeed "Running-letsencrypt" [

@@ -51,9 +51,8 @@ let to_service t =
         exec ["kubectl"; "version"];
       ]
     | `Local max_nodes -> [
+        Apt.install ["docker.io"];
         (* See http://askubuntu.com/questions/477551/how-can-i-use-docker-without-sudo *)
-        exec ["sudo"; "apt-get"; "update"];
-        exec ["sudo"; "apt"; "install"; "--yes"; "docker.io"];
         exec ["sudo"; "usermod"; "-aG"; "docker"; "opam"];
         exec ["sudo"; "chmod"; "666"; "/var/run/docker.sock"];
       ] in

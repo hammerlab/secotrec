@@ -15,7 +15,7 @@ let wait_for u =
   let open Genspio_edsl in
   (* Cf. https://docs.docker.com/compose/startup-order/ *)
   seq [
-    exec ["sudo"; "apt"; "install"; "--yes"; "postgresql-client"];
+    Apt.install ["postgresql-client"];
     seq_succeeds_or
       ~name:"Waiting-for-postgres"
       ~clean_up:[fail] [

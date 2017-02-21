@@ -26,7 +26,7 @@ module Mount = struct
         ~name:(sprintf "Mounting-%s" t.server)
         ~clean_up:[fail]
         [
-          exec ["sudo"; "apt-get"; "install"; "--yes"; "nfs-client"];
+          Apt.install ["nfs-client"];
           exec ["sudo"; "mkdir"; "-p"; t.mount_point];
           mount_command t;
         ];

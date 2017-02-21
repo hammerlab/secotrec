@@ -65,8 +65,7 @@ let ensure_software =
      &&&
      (exec ["which"; "docker-compose"] |> succeeds_silently))
     [
-      exec ["sudo"; "apt-get"; "update"];
-      exec ["sudo"; "apt"; "install"; "--yes"; "docker.io"];
+      Apt.install ["docker.io"];
       exec ["sudo"; "bash"; "-c";
             "curl -L \
              \"https://github.com/docker/compose/releases/download/1.9.0/\
