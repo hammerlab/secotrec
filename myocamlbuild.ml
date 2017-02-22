@@ -21,6 +21,13 @@ let lib : Project.item =
     ~style:(`Pack project_name)
     ~pkg:project_name
 
+let make_dockerfiles =
+  Project.app ("secotrec-make-dockerfiles")
+    ~bin_annot:()
+    ~thread:()
+    ~file:"src/app/make_dockerfiles.ml"
+    ~findlib_deps:["dockerfile.opam"]
+    ~internal_deps:[lib]
 let example_gke =
   Project.app ("secotrec-gke")
     ~bin_annot:()
@@ -44,4 +51,5 @@ let () =
         Some lib;
         Some example_gke;
         Some example_local;
+        Some make_dockerfiles;
       ])

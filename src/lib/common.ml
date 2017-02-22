@@ -100,22 +100,29 @@ module Genspio_edsl = struct
   let seq_and l =
     List.fold l ~init:(bool true) ~f:(fun u v -> u &&& succeeds v)
 
-  let seq_succeeds_or ~name ?(clean_up = []) cmds  =
+  let seq_succeeds_or ?(silent = true) ~name ?(clean_up = []) cmds  =
     let stdout i =
       ksprintf string "/tmp/cmd-%s-stdout-%d" (sanitize_name name) i in
     let stderr i =
       ksprintf string "/tmp/cmd-%s-stderr-%d" (sanitize_name name) i in
-    let log i u = write_output ~stdout:(stdout i) ~stderr:(stderr i) u in
+    let log i u =
+      if silent
+      then write_output ~stdout:(stdout i) ~stderr:(stderr i) u
+      else u in
     if_seq (seq_and (List.mapi ~f:log cmds) |> succeeds)
       ~t:[nop]
       ~e:(sayf "%s; FAILED:\\n" name
           ::
-          List.mapi cmds ~f:(fun i u ->
-              seq [
-                (* sayf "Command: `%s`" (genspio_to_one_liner u); *)
-                cat_markdown (stdout i) "stdout";
-                cat_markdown (stderr i) "stderr";
-              ])
+          begin if silent then
+              List.mapi cmds ~f:(fun i u ->
+                  seq [
+                    (* sayf "Command: `%s`" (genspio_to_one_liner u); *)
+                    cat_markdown (stdout i) "stdout";
+                    cat_markdown (stderr i) "stderr";
+                  ])
+            else
+              []
+          end
           @ clean_up)
 
 
@@ -127,10 +134,12 @@ module Genspio_edsl = struct
         ~e:(sayf "%s: Build In Progress" name :: how)
     ]
 
+  let silently u =
+    let dev_null = string "/dev/null" in
+    write_output ~stdout:dev_null ~stderr:dev_null u
 
   let succeeds_silently u =
-    let dev_null = string "/dev/null" in
-    write_output ~stdout:dev_null ~stderr:dev_null u |> succeeds
+     silently u |> succeeds
 
   let loop_until_ok ?(attempts = 20) ?(sleep = 2) cmd =
     let intvar =
