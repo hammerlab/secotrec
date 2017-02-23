@@ -228,7 +228,7 @@ let coclobas
   let install_gcloudnfs =
     comment "Installing GCloudNFS: cioc/gcloudnfs" @@@ [
       apt_get_install
-        ~upgrade:false ["python-pip"; "python-dev"; "build-essential"];
+        ~upgrade:false ["python-pip"; "python-dev"; "build-essential"; "wget"];
       bash_c "pip install --upgrade google-api-python-client";
       bash_c "wget \
               https://raw.githubusercontent.com/cioc/gcloudnfs/master/gcloudnfs \
