@@ -218,6 +218,8 @@ let coclobas
   let open Dockerfile in
   let install_gcloud =
     comment "Installing GCloud command-line tool with kubectl" @@@ [
+      apt_get_install
+        ~upgrade:false ["python"; "build-essential"];
       env ["CLOUDSDK_CORE_DISABLE_PROMPTS", "true"];
       bash_c ~sudo:false "curl https://sdk.cloud.google.com | bash";
       env ["PATH", "/home/opam/google-cloud-sdk/bin/:${PATH}"];
