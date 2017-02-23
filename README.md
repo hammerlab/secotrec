@@ -203,8 +203,8 @@ secotrec-gke down
 
 ### Secotrec-local
 
-Configuration is all optional, the `gcloud` version is actually not really
-usable, but it works the same way as Secotrec-GKE:
+Configuration is all optional (the `gcloud` version adds some constrains;
+cf. the generated config-file), but it works the same way as Secotrec-GKE:
 
 ```
 secotrec-local generate-configuration my-config.env
