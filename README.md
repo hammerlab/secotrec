@@ -21,6 +21,9 @@ Both examples have the option of preparing the default biokepi-work directory
 with
 [`b37decoy_20160927.tgz`](https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37decoy_20160927.tgz).
 
+For those administration purposes, we also provide `secotrec-make-dockerfiles`,
+as `Dockerfile` generation tool.
+
 Install
 -------
 
@@ -200,8 +203,8 @@ secotrec-gke down
 
 ### Secotrec-local
 
-Configuration is all optional, the `gcloud` version is actually not really
-usable, but it works the same way as Secotrec-GKE:
+Configuration is all optional (the `gcloud` version adds some constrains;
+cf. the generated config-file), but it works the same way as Secotrec-GKE:
 
 ```
 secotrec-local generate-configuration my-config.env
@@ -227,5 +230,30 @@ secotrec-local test biokepi-machine
 secotrec-local down
 ```
 
+### Secotrec-Make-Dockerfiles
+
+`secotrec-make-dockerfiles` is designed to update
+the repository
+[`hammerlab/keredofi`](https://github.com/hammerlab/keredofi)
+(but can start from a mostly empty repo),
+and hence the automatically built
+[`hammerlab/keredofi`](https://hub.docker.com/r/hammerlab/keredofi/builds/)
+Docker-hub images.
+
+Display all the Dockerfiles on stdout:
+
+    do=view secotrec-make-dockerfiles
+
+Write the `Dockerfile`s in their respective branches and commit if something
+changed:
+
+    dir=/path/to/keredofi do=write secotrec-make-dockerfiles
+    
+when done, the tool displays the Git graph of the Keredofi repo; if you're
+happy, just go there and `git push --all`.
 
 
+Submit a Ketrew workflow that test-builds all the `Dockerfiles` (for now this
+expects a `secotrec-local`-like setup):
+
+    do=test secotrec-make-dockerfiles

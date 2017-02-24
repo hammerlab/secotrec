@@ -22,6 +22,11 @@ let configuration =
           env "ketrew_debug_functions" ~required:false
             ~help:"Run Ketrew with debug `on` for a given comma-separated list of \
                    functions.";
+          env "ketrew_auth_token" ~required:false ~default:"nekot"
+            ~help:"The auth-token used by Ketrew, if you are running on a \n\
+                   GCloud instance it is highly recommended to change this!";
+          env "coclobas_max_jobs" ~required:false ~default:"2"
+            ~help:"The limit on Coclobas' local-docker scheduler.";
         ]
         @ Util.common_opam_pins#configuration
       end;
@@ -51,7 +56,7 @@ let example () =
           | exception _ -> `GB 2_000 in
         Gcloud_instance.make ~zone:(conf "gcloud_zone") name
           ~boot_disk_size
-          ~machine_type:(`Google_cloud `Highmem_8)
+          ~machine_type:(`Google_cloud `Highmem_16)
       )
     | None ->
       Deployment.Node.localhost () ~properties
@@ -61,8 +66,9 @@ let example () =
       (Uri.of_string "postgresql://pg/?user=postgres&password=kpass") in
   let opam_pin = Util.common_opam_pins#opam_pins configuration in
   let coclo =
-    Coclobas.make (`Local 2) ~db ~opam_pin ~tmp_dir:coclo_tmp_dir in
-  let auth_token = "nekot" in
+    Coclobas.make (`Local (conf "coclobas_max_jobs" |> int_of_string))
+      ~db ~opam_pin ~tmp_dir:coclo_tmp_dir in
+  let auth_token = conf "ketrew_auth_token" in
   let ketrew =
     let ketrew_debug_functions =
       try
@@ -82,6 +88,14 @@ let example () =
       ~coclobas:coclo
       ~mounts:[ `Local (biokepi_work#host, biokepi_work#mount) ]
       "The-Local-Machine" in
+  let tlstunnel =
+    Option.map (conf_opt "gcloud_name") ~f:(fun _ ->
+        let backend_address, backend_port = "kserver", 8080 in
+        Tlstunnel.make "tlstun"
+          ~certificate:`Fake
+          ~backend_address ~backend_port
+          ~frontend_port:8443)
+  in
   let preparation =
     let open Data_preparation in
     make [
@@ -90,6 +104,7 @@ let example () =
         ~in_directory:(biokepi_work#mount // "workdir/reference-genome");
     ] in
   Deployment.make "Light-local" ~node
+    ?tlstunnel
     ~preparation
     ~biokepi_machine
     ~db
