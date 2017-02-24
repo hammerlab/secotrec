@@ -312,13 +312,20 @@ let () =
   let build_all l =
     let open Ketrew.EDSL in
     let build_one (dockerfile, branch) =
-      workflow_node without_product ~name:(sprintf "Make %s" branch)
+      let tmp_dir = "/tmp/secotrec-local-shared-temp" in
+      let witness_file =
+        sprintf "docker-build-%s-%s"
+          branch
+          (Dockerfile.string_of_t dockerfile |> Digest.string |> Digest.to_hex)
+      in
+      workflow_node (tmp_dir // witness_file |> single_file)
+        ~name:(sprintf "Make %s" branch)
         ~make:(
           let dirname = sprintf "/tmp/build-%s" branch in
           Coclobas_ketrew_backend.Plugin.local_docker_program
             ~base_url:"http://coclo:8082"
             ~image:"ubuntu"
-            ~tmp_dir:"/tmp/secotrec-local-shared-temp"
+            ~tmp_dir
             ~volume_mounts:[
               `Local ("/var/run/docker.sock", "/var/run/docker.sock");
             ]
@@ -331,6 +338,9 @@ let () =
                 shf "echo %s > Dockerfile"
                   (Dockerfile.string_of_t dockerfile |> Filename.quote);
                 shf "docker build -t hammerlab/keredofi-test:%s ." branch;
+                shf "mkdir -p /shared";
+                shf "printf \"Done: $(date -R)\\n\" > /coclobas-ketrew-plugin-playground/%s" witness_file;
+                shf "chmod 777 /coclobas-ketrew-plugin-playground/%s" witness_file;
               ]
             )
         )
