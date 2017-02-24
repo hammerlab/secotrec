@@ -59,6 +59,12 @@ If you do not plan to use `secotrec-local` you don't need the
 Docker socket (`-v /var/run/docker.sock:/var/run/docker.sock`),
 see `docker run --help` for more options.
 
+If you do use `secotrec-local`, please mind that we cannot access the Ketrew
+server from the current container (which is in a different network). We can jump
+to another container which is in the right network:
+
+    secotrec-local docker-compose exec coclo opam config exec bash
+
 Usage
 -----
 
