@@ -28,6 +28,7 @@ depends: [
   "genspio"
   "coclobas"
   "ketrew"
+  "dockerfile"
 ]
 available: [
   ocaml-version >= "4.03.0"
