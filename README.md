@@ -21,8 +21,8 @@ Both examples have the option of preparing the default biokepi-work directory
 with
 [`b37decoy_20160927.tgz`](https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37decoy_20160927.tgz).
 
-For more “administrator” roles, we also provide `secotrec-make-dockerfiles`, as
-`Dockerfile` generation tool.
+For those administration purposes, we also provide `secotrec-make-dockerfiles`,
+as `Dockerfile` generation tool.
 
 Install
 -------
@@ -236,7 +236,7 @@ secotrec-local down
 the repository
 [`hammerlab/keredofi`](https://github.com/hammerlab/keredofi)
 (but can start from a mostly empty repo),
-and hence the
+and hence the automatically built
 [`hammerlab/keredofi`](https://hub.docker.com/r/hammerlab/keredofi/builds/)
 Docker-hub images.
 
