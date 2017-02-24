@@ -262,53 +262,111 @@ let env_exn s =
 let env_opt s =
   try Some (Sys.getenv s) with _ -> None
 
+let in_dir dir f =
+  let original_dir = Sys.getcwd () in
+  Sys.chdir dir;
+  begin try
+    f ()
+  with e ->
+    Sys.chdir original_dir;
+    raise e
+  end
+
+let in_branch ~repo_dir ~branch =
+  let open Genspio_edsl in
+  let name = sprintf "goto-branch-%s" branch in
+  seq_succeeds_or ~silent:false ~clean_up:[fail] ~name [
+    sayf "Going to branch %S in %s" branch repo_dir;
+    if_seq
+      (exec ["git"; "checkout";  branch] |> succeeds_silently)
+      ~t:[sayf "Branch %S exists" branch]
+      ~e:[
+        seq_succeeds_or ~silent:false ~clean_up:[fail] ~name [
+          sayf "Creating branch %S" branch;
+          exec ["git"; "checkout"; "-b"; branch]
+        ]
+      ];
+  ]
+
+let commit_maybe ~branch files =
+  let open Genspio_edsl in
+  let name = sprintf "commit-%s" branch in
+  seq_succeeds_or ~silent:false ~clean_up:[fail] ~name [
+    if_seq (exec ["git"; "diff"; "--quiet"; "--exit-code"]
+            |> returns ~value:0) 
+      ~t:[
+        sayf "Nothing to commit for %s" branch;
+      ]
+      ~e:[
+        sayf "Committing %s for %s" (String.concat ~sep:", " files) branch;
+        seq_succeeds_or  ~clean_up:[fail] ~name:"Commititng" [
+          exec (["git"; "add"] @ files);
+          exec ["git";"commit"; "-m";
+                sprintf "Update %s for %s"
+                  (String.concat ~sep:", " files)
+                  branch];
+        ]
+      ]
+  ]
+
 let () =
   let what = env_opt "do" in
   let write repo_dir dockerfile branch =
-    (* let scsf fmt = cmdf ~returns:0 fmt in *)
-    let original_dir = Sys.getcwd () in
-    Sys.chdir repo_dir;
-    begin try
+    in_dir repo_dir begin fun () ->
       let name = sprintf "write-and-commit-%s" branch in
       run_genspio ~output_errors:true ~name ~returns:0
         Genspio_edsl.(
           seq [
+            in_branch ~repo_dir ~branch;
             seq_succeeds_or ~silent:false ~clean_up:[fail] ~name [
-              sayf "Going to branch %S in %s" branch repo_dir;
-              if_seq
-                (exec ["git"; "checkout";  branch] |> succeeds_silently)
-                ~t:[sayf "Branch %S exists" branch]
-                ~e:[
-                  seq_succeeds_or ~silent:false ~clean_up:[fail] ~name [
-                    sayf "Creating branch %S" branch;
-                    exec ["git"; "checkout"; "-b"; branch]
-                  ]
-                ];
               (Dockerfile.string_of_t dockerfile ^ "\n" |> string
                >> exec ["cat"] |> write_stdout ~path:(string "./Dockerfile"));
-              if_seq (exec ["git"; "diff"; "--quiet"; "--exit-code"]
-                      |> returns ~value:0) 
-                ~t:[
-                  sayf "Nothing to commit for %s" branch;
-                ]
-                ~e:[
-                  sayf "Committing ./Dockerfile for %s" branch;
-                  seq_succeeds_or  ~clean_up:[fail] ~name:"Commititng" [
-                    exec ["git"; "add"; "./Dockerfile"];
-                    exec ["git";"commit"; "-m";
-                          sprintf "Update Dockerfile for %s" branch];
-                  ]
-                ]
             ];
+            commit_maybe ~branch ["./Dockerfile"];
             sayf "Going to back to master branch";
             exec ["git"; "checkout"; "master"] |> silently;
           ]
         )
-    with e ->
-      Sys.chdir original_dir;
-      raise e
     end
   in
+  let write_readme repo_dir dockerfiles =
+    let header =
+      "Keredofi\n\
+       ========\n\
+       \n\
+       Ketrew-Related `DockerFile`s \
+       (contents of this repo are software-generated, cf. \n\
+       [`hammerlab/secotrec`](https://github.com/hammerlab/secotrec)).\n\n"
+    in
+    let branch_list_section =
+      "Available Tags\n\
+       --------------\n\n\
+      See also the Docker-hub \
+       [tags](https://hub.docker.com/r/hammerlab/keredofi/tags/).\n\n\
+      "
+      ^ String.concat ~sep:"" 
+        (List.map dockerfiles ~f:(fun (_, b) ->
+             let dockerfile_github =
+               sprintf
+                 "https://github.com/hammerlab/keredofi/blob/%s/Dockerfile" b in
+             sprintf "* `%s` (see [`Dockerfile`](%s)).\n" b dockerfile_github))
+    in
+    let readme_content =
+      header ^ branch_list_section in
+    in_dir repo_dir begin fun () ->
+      let name = sprintf "write-and-commit-README" in
+      run_genspio ~output_errors:true ~name ~returns:0
+        Genspio_edsl.(
+          seq [
+            in_branch ~repo_dir ~branch:"master";
+            seq_succeeds_or ~silent:false ~clean_up:[fail] ~name [
+              (readme_content |> string
+               >> exec ["cat"] |> write_stdout ~path:(string "./README.md"));
+            ];
+            commit_maybe ~branch:"master" ["./README.md"];
+          ]
+        )
+    end in
   let build_all l =
     let open Ketrew.EDSL in
     let build_one (dockerfile, branch) =
@@ -368,6 +426,7 @@ let () =
     List.iter dockerfiles ~f:(fun (d, b) ->
         printf "====== Making %s ======\n%!" b;
         write dir d b); 
+    write_readme dir dockerfiles;
     cmdf
       "cd %s && \
        git status -s && \
