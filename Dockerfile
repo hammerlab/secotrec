@@ -19,3 +19,6 @@ RUN opam pin -n add genspio https://github.com/hammerlab/genspio.git
 RUN opam pin -n add secotrec https://github.com/hammerlab/secotrec.git
 RUN opam upgrade
 RUN opam install tls secotrec biokepi
+
+# This is needed for the DNS check happening as part of `secotrec-gke up`:
+RUN sudo apt-get install -y dnsutils
