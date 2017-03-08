@@ -36,21 +36,6 @@ let opam_default_remote =
   ]
 
 let ketrew_server ?(local_opam_repo = false) how =
-  (*
-
-FROM ocaml/opam:ubuntu-16.04_ocaml-4.03.0
-RUN sudo apt-get install --yes libpq-dev libev-dev libgmp-dev
-RUN opam install -y tls conf-libev
-RUN opam pin --yes add ketrew https://github.com/hammerlab/ketrew.git
-
-# We create a config directory:
-RUN eval `opam config env` ; ketrew init --use-database=postgresql://example.com --conf /tmp/ketrew/ --self-signed
-
-# But we use a custom config file (That still points to "/tmp/ketrew"):
-COPY configuration.ml .
-RUN sudo chmod 777 configuration.ml
-ENV KETREW_CONFIGURATION ./configuration.ml
-     *)
   let packages =
     let sqlite =
       match how with
@@ -77,46 +62,7 @@ ENV KETREW_CONFIGURATION ./configuration.ml
       end;
     ]
   )
-(*
 
-# We pull from `ketrew-server` because a bunch of stuff has been done right
-# in https://github.com/ocaml/opam-dockerfiles
-# and we trust the people who did it (@avsm).
-# And we get `aspcud` on the way.
-FROM hammerlab/ketrew-server
-# Installing easy Biokepi dependencies:
-RUN sudo apt-get update
-RUN sudo apt-get install --yes cmake r-base tcsh libx11-dev libfreetype6-dev pkg-config wget gawk graphviz xvfb git
-
-# install wkhtmltopdf from source, this version comes with patched QT necessary for PDF gen
-RUN cd /tmp ; wget http://download.gna.org/wkhtmltopdf/0.12/0.12.3/wkhtmltox-0.12.3_linux-generic-amd64.tar.xz
-RUN cd /tmp && tar xvfJ wkhtmltox-0.12.3_linux-generic-amd64.tar.xz
-RUN cd /tmp/wkhtmltox/bin && sudo chown root:root wkhtmltopdf
-RUN sudo cp /tmp/wkhtmltox/bin/wkhtmltopdf /usr/local/bin/wkhtmltopdf
-
-# The hard-one Oracle's Java 7
-RUN sudo add-apt-repository --yes ppa:webupd8team/java
-RUN sudo apt-get update
-# On top of that we have to fight with interactive licensing questions
-# http://askubuntu.com/questions/190582/installing-java-automatically-with-silent-option
-RUN sudo bash -c "echo debconf shared/accepted-oracle-license-v1-1 select true | debconf-set-selections"
-RUN sudo bash -c "echo debconf shared/accepted-oracle-license-v1-1 seen true |  debconf-set-selections"
-RUN sudo bash -c "DEBIAN_FRONTEND=noninteractive apt-get install --yes --allow-unauthenticated oracle-java7-installer"
-
-# Now a fresh non-sudo user:
-
-RUN sudo bash -c "\
-  adduser --uid 20042 --disabled-password --gecos '' biokepi && \
-  passwd -l biokepi && \
-  chown -R biokepi:biokepi /home/biokepi"
-USER biokepi
-ENV HOME /home/biokepi
-WORKDIR /home/biokepi
-RUN opam init -a --yes --comp 4.02.3
-
-# Copy local fonts config over, also needed for PDF gen
-COPY fonts.conf /etc/fonts/local.conf
-*)
 let biokepi_user =
   let open Dockerfile in
   object (self)
@@ -181,34 +127,17 @@ let biokepi_run () =
   @@ oracle_java_7
   @@ biokepi_user#create_and_switch_to
 
-(*
+let install_gcloud =
+  let open Dockerfile in
+  comment "Installing GCloud command-line tool with kubectl" @@@ [
+    apt_get_install
+      ~upgrade:false ["python"; "build-essential"];
+    env ["CLOUDSDK_CORE_DISABLE_PROMPTS", "true"];
+    bash_c ~sudo:false "curl https://sdk.cloud.google.com | bash";
+    env ["PATH", "/home/opam/google-cloud-sdk/bin/:${PATH}"];
+    run "gcloud components install kubectl";
+  ]
 
-# We want `ocaml`, `opam`, and the `biokepi` user:
-FROM hammerlab/biokepi-run
-
-# `opam` is the user with `sudo` powers, and the local `opam-repository`
-USER opam
-ENV HOME /home/opam
-WORKDIR /home/opam
-
-ENV CLOUDSDK_CORE_DISABLE_PROMPTS true
-RUN bash -c 'curl https://sdk.cloud.google.com | bash'
-ENV PATH "/home/opam/google-cloud-sdk/bin/:${PATH}"
-RUN gcloud components install kubectl
-
-RUN sudo apt-get install -y  python-pip python-dev build-essential
-RUN sudo pip install --upgrade google-api-python-client
-RUN sudo wget https://raw.githubusercontent.com/cioc/gcloudnfs/master/gcloudnfs -O/usr/bin/gcloudnfs
-RUN sudo chmod a+rx /usr/bin/gcloudnfs
-
-RUN sudo apt-get install -y zlib1g-dev screen nfs-common graphviz
-RUN opam install --yes tlstunnel
-RUN opam pin --yes add solvuu-build https://github.com/solvuu/solvuu-build.git
-RUN opam pin --yes add coclobas https://github.com/hammerlab/coclobas.git
-
-COPY please.sh /usr/bin/
-RUN sudo chmod 777 /usr/bin/please.sh
-*)
 let coclobas
     ?(with_gcloud = false)
     ?(with_gcloudnfs = false)
@@ -216,15 +145,6 @@ let coclobas
     ?(with_secotrec_gke = false)
     ~ketrew ~coclobas () =
   let open Dockerfile in
-  let install_gcloud =
-    comment "Installing GCloud command-line tool with kubectl" @@@ [
-      apt_get_install
-        ~upgrade:false ["python"; "build-essential"];
-      env ["CLOUDSDK_CORE_DISABLE_PROMPTS", "true"];
-      bash_c ~sudo:false "curl https://sdk.cloud.google.com | bash";
-      env ["PATH", "/home/opam/google-cloud-sdk/bin/:${PATH}"];
-      run "gcloud components install kubectl";
-    ] in
   let install_gcloudnfs =
     comment "Installing GCloudNFS: cioc/gcloudnfs" @@@ [
       apt_get_install
@@ -256,6 +176,7 @@ let coclobas
          https://github.com/hammerlab/coclobas.git#%s" b
     end;
   ]
+
 
 let env_exn s =
   try Sys.getenv s with _ -> ksprintf failwith "Missing env-var: %S" s
