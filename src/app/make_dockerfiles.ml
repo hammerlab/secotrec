@@ -2,6 +2,17 @@
 open Secotrec
 open Common
 
+let in_dir dir f =
+  let original_dir = Sys.getcwd () in
+  Sys.chdir dir;
+  begin try
+    f ();
+    Sys.chdir original_dir;
+  with e ->
+    Sys.chdir original_dir;
+    raise e
+  end
+
 module Dockerfiles = struct
 
   let seb_maintains =
@@ -267,43 +278,25 @@ module Github_repo = struct
           ]
         ]
     ]
-end
 
-let env_exn s =
-  try Sys.getenv s with _ -> ksprintf failwith "Missing env-var: %S" s
-let env_opt s =
-  try Some (Sys.getenv s) with _ -> None
-
-let in_dir dir f =
-  let original_dir = Sys.getcwd () in
-  Sys.chdir dir;
-  begin try
-    f ()
-  with e ->
-    Sys.chdir original_dir;
-    raise e
-  end
-
-let () =
-  let what = env_opt "do" in
   let write repo_dir dockerfile branch =
     in_dir repo_dir begin fun () ->
       let name = sprintf "write-and-commit-%s" branch in
       run_genspio ~output_errors:true ~name ~returns:0
         Genspio_edsl.(
           seq [
-            Github_repo.in_branch ~repo_dir ~branch;
+            in_branch ~repo_dir ~branch;
             seq_succeeds_or ~silent:false ~clean_up:[fail] ~name [
               (Dockerfile.string_of_t dockerfile ^ "\n" |> string
                >> exec ["cat"] |> write_stdout ~path:(string "./Dockerfile"));
             ];
-            Github_repo.commit_maybe ~branch ["./Dockerfile"];
+            commit_maybe ~branch ["./Dockerfile"];
             sayf "Going to back to master branch";
             exec ["git"; "checkout"; "master"] |> silently;
           ]
         )
     end
-  in
+
   let write_readme repo_dir dockerfiles =
     let header =
       "Keredofi\n\
@@ -334,16 +327,20 @@ let () =
       run_genspio ~output_errors:true ~name ~returns:0
         Genspio_edsl.(
           seq [
-            Github_repo.in_branch ~repo_dir ~branch:"master";
+            in_branch ~repo_dir ~branch:"master";
             seq_succeeds_or ~silent:false ~clean_up:[fail] ~name [
               (readme_content |> string
                >> exec ["cat"] |> write_stdout ~path:(string "./README.md"));
             ];
-            Github_repo.commit_maybe ~branch:"master" ["./README.md"];
+            commit_maybe ~branch:"master" ["./README.md"];
           ]
         )
-    end in
-  let build_all l =
+    end
+end
+
+module Test_build = struct
+
+  let build_all_workflow l =
     let open Ketrew.EDSL in
     let build_one (dockerfile, branch) =
       let tmp_dir = "/tmp/secotrec-local-shared-temp" in
@@ -382,14 +379,24 @@ let () =
     workflow_node without_product
       ~name:"Test-Build All Images"
       ~edges:(List.map l ~f:(fun v -> build_one v |> depends_on))
-  in
+
+
+end
+
+let env_exn s =
+  try Sys.getenv s with _ -> ksprintf failwith "Missing env-var: %S" s
+let env_opt s =
+  try Some (Sys.getenv s) with _ -> None
+
+let () =
+  let what = env_opt "do" in
   begin match what with
   | Some "write" ->
     let dir = env_exn "dir" in
     List.iter Dockerfiles.all ~f:(fun (d, b) ->
         printf "====== Making %s ======\n%!" b;
-        write dir d b); 
-    write_readme dir Dockerfiles.all;
+        Github_repo.write dir d b); 
+    Github_repo.write_readme dir Dockerfiles.all;
     cmdf
       "cd %s && \
        git status -s && \
@@ -397,7 +404,9 @@ let () =
       dir;
     ()
   | Some "test" ->
-    Ketrew.Client.submit_workflow (build_all Dockerfiles.all)
+    Ketrew.Client.submit_workflow
+      ~add_tags:["secotrec"; "make-dockerfiles"]
+      (Test_build.build_all_workflow Dockerfiles.all)
   | None | Some "view" ->
     List.iter Dockerfiles.all ~f:(fun (d, b) ->
         printf "Branch `%s`:\n\n```\n%s\n```\n\n" b
