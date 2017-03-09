@@ -223,6 +223,16 @@ module Dockerfiles = struct
         ];
     ]
 
+  let ubuntu_docker () =
+    let open Dockerfile in
+    comment "Ubuntu, updated, and with Docker installed" @@@ [
+      from "ubuntu";
+      seb_maintains;
+      upgrade_ubuntu ~sudo:false ();
+      apt_get_install ~sudo:false ["docker.io"];
+    ]
+
+
 end
 
 module Test = struct
@@ -314,6 +324,7 @@ module Image = struct
           Test.succeeds "gcloud version";
           Test.succeeds "kubectl version --client";
         ];
+      make "ubuntu-docker" ~dockerfile:(ubuntu_docker ());
     ]
 
 end
