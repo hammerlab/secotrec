@@ -53,12 +53,12 @@ Notes:
 #### Getting the Docker image
 
     # Get the docker image
-    docker pull hammerlab/secotrec
+    docker pull hammerlab/keredofi:secotrec-default
 
 #### Setup for secrotec-gke
 
     # Enter the container for GKE use case
-    docker run -e KETREW_CONFIGURATION -it hammerlab/secotrec bash
+    docker run -e KETREW_CONFIGURATION -it hammerlab/keredofi:secotrec-default
 
 #### Setup secrotec-local
 
@@ -66,11 +66,11 @@ Notes:
     docker run \
       -v /var/run/docker.sock:/var/run/docker.sock \
       -e KETREW_CONFIGURATION \
-      -it hammerlab/secotrec \
+      -it hammerlab/keredofi:secotrec-default \
       bash
 
 If you do use `secotrec-local`, please mind that we cannot access the Ketrew
-server from the current container (which is in a different network). We can jump
+server from the current container (which is in a different network). We can jumep
 to another container which is in the right network:
 
     secotrec-local docker-compose exec coclo opam config exec bash
