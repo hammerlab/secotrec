@@ -279,6 +279,7 @@ module Image = struct
   type t = {
     dockerfile: Dockerfile.t;
     tests: Test.t list;
+    description: string option;
     tag: string [@main];
   } [@@deriving make]
 
@@ -286,6 +287,7 @@ module Image = struct
 
   let tag t = t.tag
   let dockerfile t = t.dockerfile
+  let description t = t.description
   let branch = tag
   let tests t = t.tests
 
@@ -294,14 +296,24 @@ module Image = struct
     [
       make "ketrew-server-300"
         ~dockerfile:(ketrew_server `K300)
+        ~description:"OCaml/Opam environment with \
+                      [Ketrew](https://github.com/hammerlab/ketrew) 3.0.0 \
+                      installed."
         ~tests:[
           Test.test_dashdashversion "ketrew" "3.0.0";
         ];
       make "ketrew-server" ~dockerfile:(ketrew_server (`Branch "master"))
+        ~description:"OCaml/Opam environment with the `master` version of \
+                      [Ketrew](https://github.com/hammerlab/ketrew) installed."
         ~tests:[
           Test.test_dashdashversion "ketrew" "3.0.0+dev";
         ];
-      make "biokepi-run" ~dockerfile:(biokepi_run ());
+      make "biokepi-run"
+        ~description:"Ubuntu image with the “system” dependencies that \
+                      [Biokepi](https://github.com/hammerlab/biokepi) \
+                      workflows require, and a special `biokepi` user with a \
+                      fixed UID (useful for shared file-systems)."
+        ~dockerfile:(biokepi_run ());
       make "coclobas-gke-dev"
         ~dockerfile:(coclobas ~with_gcloud:true ~ketrew:(`Branch "master")
                        ~coclobas:(`Branch "master") ());
@@ -315,6 +327,9 @@ module Image = struct
           Test.test_dashdashversion "coclobas" "0.0.0";
         ];
       make "secotrec-default" ~dockerfile:(secotrec ())
+        ~description:"OCaml/Opam environment with the `master` version of \
+                      [Secotrec](https://github.com/hammerlab/secotrec) \
+                      (and some tools it may use) installed."
         ~tests:[
           Test.test_dashdashversion "ketrew" "3.0.0+dev";
           Test.test_dashdashversion "coclobas" "0.0.0";
@@ -324,7 +339,12 @@ module Image = struct
           Test.succeeds "gcloud version";
           Test.succeeds "kubectl version --client";
         ];
-      make "ubuntu-docker" ~dockerfile:(ubuntu_docker ());
+      make "ubuntu-docker"
+        ~description:"Just an Ubuntu image with `docker.io` installed \
+                      (useful for testing these images, cf. \
+                      Secotrec \
+                      [docs](https://github.com/hammerlab/secotrec#secotrec-make-dockerfiles))."
+        ~dockerfile:(ubuntu_docker ());
     ]
 
 end
@@ -408,8 +428,12 @@ module Github_repo = struct
                sprintf
                  "https://github.com/hammerlab/keredofi/blob/%s/Dockerfile"
                  (Image.branch im) in
-             sprintf "* `hammerlab/keredofi:%s` (see [`Dockerfile`](%s)).\n"
-               (Image.tag im) dockerfile_github))
+             sprintf "* `hammerlab/keredofi:%s`:\n%s\
+                     \    * See [`Dockerfile`](%s).\n"
+               (Image.tag im)
+               (Image.description im
+                |> Option.value_map ~f:(sprintf "    * %s\n") ~default:"")
+               dockerfile_github))
     in
     let readme_content =
       header ^ branch_list_section in
