@@ -223,21 +223,35 @@ module Dockerfiles = struct
         ];
     ]
 
+end
 
-  let all = [
-    ketrew_server `K300, "ketrew-server-300";
-    ketrew_server (`Branch "master"), "ketrew-server";
-    biokepi_run (), "biokepi-run";
-    coclobas ~with_gcloud:true ~ketrew:(`Branch "master")
-      ~coclobas:(`Branch "master") (), "coclobas-gke-dev";
-    coclobas ~with_gcloud:true
-      ~with_gcloudnfs:true
-      ~with_biokepi_user:true
-      ~with_secotrec_gke:true
-      ~ketrew:(`Branch "master")
-      ~coclobas:(`Branch "master") (), "coclobas-gke-biokepi-dev";
-    secotrec (), "secotrec-default";
-  ]
+module Image = struct
+
+  type t = {
+    dockerfile: Dockerfile.t;
+    tag: string [@main];
+  } [@@deriving make,show]
+
+  let tag t = t.tag
+  let dockerfile t = t.dockerfile
+  let branch = tag
+
+  let all =
+    let open Dockerfiles in
+    [
+      make "ketrew-server-300" ~dockerfile:(ketrew_server `K300);
+      make "ketrew-server" ~dockerfile:(ketrew_server (`Branch "master"));
+      make "biokepi-run" ~dockerfile:(biokepi_run ());
+      make "coclobas-gke-dev"
+        ~dockerfile:(coclobas ~with_gcloud:true ~ketrew:(`Branch "master")
+                       ~coclobas:(`Branch "master") ());
+      make "coclobas-gke-biokepi-dev"
+        ~dockerfile:(coclobas ~with_gcloud:true ~with_gcloudnfs:true
+                       ~with_biokepi_user:true ~with_secotrec_gke:true
+                       ~ketrew:(`Branch "master") ~coclobas:(`Branch "master") ());
+      make "secotrec-default" ~dockerfile:(secotrec ());
+    ]
+
 end
 
 module Github_repo = struct
@@ -279,15 +293,16 @@ module Github_repo = struct
         ]
     ]
 
-  let write repo_dir dockerfile branch =
+  let write repo_dir image =
     in_dir repo_dir begin fun () ->
+      let branch = Image.tag image in
       let name = sprintf "write-and-commit-%s" branch in
       run_genspio ~output_errors:true ~name ~returns:0
         Genspio_edsl.(
           seq [
             in_branch ~repo_dir ~branch;
             seq_succeeds_or ~silent:false ~clean_up:[fail] ~name [
-              (Dockerfile.string_of_t dockerfile ^ "\n" |> string
+              (Dockerfile.string_of_t (Image.dockerfile image) ^ "\n" |> string
                >> exec ["cat"] |> write_stdout ~path:(string "./Dockerfile"));
             ];
             commit_maybe ~branch ["./Dockerfile"];
@@ -313,12 +328,13 @@ module Github_repo = struct
        [tags](https://hub.docker.com/r/hammerlab/keredofi/tags/).\n\n\
       "
       ^ String.concat ~sep:"" 
-        (List.map dockerfiles ~f:(fun (_, b) ->
+        (List.map dockerfiles ~f:(fun im ->
              let dockerfile_github =
                sprintf
-                 "https://github.com/hammerlab/keredofi/blob/%s/Dockerfile" b in
+                 "https://github.com/hammerlab/keredofi/blob/%s/Dockerfile"
+                 (Image.branch im) in
              sprintf "* `hammerlab/keredofi:%s` (see [`Dockerfile`](%s)).\n"
-               b dockerfile_github))
+               (Image.tag im) dockerfile_github))
     in
     let readme_content =
       header ^ branch_list_section in
@@ -342,7 +358,9 @@ module Test_build = struct
 
   let build_all_workflow l =
     let open Ketrew.EDSL in
-    let build_one (dockerfile, branch) =
+    let build_one image =
+      let branch = Image.branch image in
+      let dockerfile = Image.dockerfile image in
       let tmp_dir = "/tmp/secotrec-local-shared-temp" in
       let witness_file =
         sprintf "docker-build-%s-%s"
@@ -393,10 +411,10 @@ let () =
   begin match what with
   | Some "write" ->
     let dir = env_exn "dir" in
-    List.iter Dockerfiles.all ~f:(fun (d, b) ->
-        printf "====== Making %s ======\n%!" b;
-        Github_repo.write dir d b); 
-    Github_repo.write_readme dir Dockerfiles.all;
+    List.iter Image.all ~f:(fun i ->
+        printf "====== Making %s ======\n%!" (Image.show i);
+        Github_repo.write dir i); 
+    Github_repo.write_readme dir Image.all;
     cmdf
       "cd %s && \
        git status -s && \
@@ -406,11 +424,11 @@ let () =
   | Some "test" ->
     Ketrew.Client.submit_workflow
       ~add_tags:["secotrec"; "make-dockerfiles"]
-      (Test_build.build_all_workflow Dockerfiles.all)
+      (Test_build.build_all_workflow Image.all)
   | None | Some "view" ->
-    List.iter Dockerfiles.all ~f:(fun (d, b) ->
-        printf "Branch `%s`:\n\n```\n%s\n```\n\n" b
-          (Dockerfile.string_of_t d));
+    List.iter Image.all ~f:(fun im ->
+        printf "Branch `%s`:\n\n```\n%s\n```\n\n" (Image.branch im)
+          (Dockerfile.string_of_t (Image.dockerfile im)));
   | Some other ->
     ksprintf failwith "Don't know what %S ($what) means" other
   end;
