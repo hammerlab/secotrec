@@ -178,6 +178,20 @@ let deployment_commands (deployment : unit -> Deployment.t) =
                  @@ info [] ~docv:"PATH"
                    ~doc:"Path to the .ml file.")
         ) in
+  let useful_env =
+    sub_command
+      ~info:Term.(info "environment-varirables"
+                    ~version ~sdocs:"COMMON OPTIONS" ~man:[]
+                    ~doc:"Generate some useful environment variables.")
+      ~term: Term.(
+          pure (fun deployment path ->
+              Deployment.Run.Generate.useful_env ?path deployment)
+          $ deployment_arg
+          $ Arg.(value
+                 @@ pos 0 (some string) None
+                 @@ info [] ~docv:"PATH"
+                   ~doc:"Path to the configuration directory.")
+        ) in
   let preparation_workflow =
     sub_command
       ~info:Term.(info "prepare"
@@ -261,7 +275,7 @@ let deployment_commands (deployment : unit -> Deployment.t) =
     docker_compose; make_command_alias docker_compose "dc";
     up; down; status; top; psql;
     coclobas_client; make_command_alias coclobas_client "cc";
-    ketrew_configuration; biokepi_machine;
+    ketrew_configuration; biokepi_machine; useful_env;
     preparation_workflow; test_biokepi_machine;
     backup_database; restore_database_backup;
     coclobas_logs; ketrew_logs;

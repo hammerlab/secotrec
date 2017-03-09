@@ -470,6 +470,31 @@ module Run = struct
                 string "--just-client"; ketrew_url;];
         ])
 
+    let useful_env ?path t =
+      let out, clos =
+        Option.value_map path ~f:(fun p -> open_out p, close_out)
+          ~default:(stdout, fun _ -> ()) in
+      let env k v =
+        fprintf out "export %s=%s\n%!" k v
+      in
+      let opt_iter ~f = function None -> () | Some x -> f x in
+      opt_iter t.db ~f:begin fun pg ->
+        env "PG_SERVICE_NAME" (Postgres.container_name pg);
+        env "PG_SERVICE_URI" (Postgres.to_uri pg |> Uri.to_string);
+      end;
+      opt_iter t.coclobas ~f:begin fun coco ->
+        env "COCLOBAS_SERVICE_NAME" (Coclobas.name coco);
+        env "COCLOBAS_TMP_DIR" (Coclobas.tmp_dir coco);
+        env "COCLOBAS_BASE_URL" (Coclobas.base_url coco);
+        env "COCLOBAS_LOCAL_URL" (Coclobas.url_for_local_client coco);
+      end;
+      opt_iter t.ketrew ~f:begin fun ks ->
+        env "KETREW_SERVICE_NAME" (Ketrew_server.name ks);
+      end;
+      clos out;
+      ()
+      
+
   end
 
   let prepare ?userinfo t =
