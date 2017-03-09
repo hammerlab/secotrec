@@ -225,22 +225,72 @@ module Dockerfiles = struct
 
 end
 
+module Test = struct
+  type t = {
+    procedure: [ `Genspio of unit Genspio.EDSL.t ];
+    name: string [@main];
+  } [@@deriving make]
+
+  let genspio name ~procedure = make name ~procedure:(`Genspio procedure)
+
+  let to_shell t =
+    match t.procedure with
+    | `Genspio g -> Genspio.Language.to_many_lines g
+
+  let gassert name cond =
+    let open Genspio.EDSL in
+    if_seq cond ~t:[] ~e:[
+      eprintf (string "\n\nTest %s FAILED!\n\n") [string name];
+      fail;
+    ]
+
+  let test_dashdashversion cmdname ~expect =
+    let name = sprintf "%s-version" cmdname in
+    let procedure =
+      let open Genspio.EDSL in
+      gassert name
+        (exec [cmdname; "--version"] |> output_as_string =$= (ksprintf string "%s\n" expect))
+    in
+    genspio name ~procedure
+
+  let succeeds cmd =
+    let name = sprintf "Command `%s` succeeds" cmd in
+    genspio name
+      Genspio.EDSL.(gassert name (exec ["sh"; "-c"; cmd] |> succeeds))
+      
+
+    
+
+
+end
+
 module Image = struct
 
   type t = {
     dockerfile: Dockerfile.t;
+    tests: Test.t list;
     tag: string [@main];
-  } [@@deriving make,show]
+  } [@@deriving make]
+
+  let show t = sprintf "Image `%s`" t.tag
 
   let tag t = t.tag
   let dockerfile t = t.dockerfile
   let branch = tag
+  let tests t = t.tests
 
   let all =
     let open Dockerfiles in
     [
-      make "ketrew-server-300" ~dockerfile:(ketrew_server `K300);
-      make "ketrew-server" ~dockerfile:(ketrew_server (`Branch "master"));
+      make "ketrew-server-300"
+        ~dockerfile:(ketrew_server `K300)
+        ~tests:[
+          Test.test_dashdashversion "ketrew" "3.0.0";
+        ];
+      make "ketrew-server" ~dockerfile:(ketrew_server (`Branch "master"))
+        ~tests:[
+          Test.test_dashdashversion "ketrew" "3.0.0+dev";
+        ];
       make "biokepi-run" ~dockerfile:(biokepi_run ());
       make "coclobas-gke-dev"
         ~dockerfile:(coclobas ~with_gcloud:true ~ketrew:(`Branch "master")
@@ -248,8 +298,22 @@ module Image = struct
       make "coclobas-gke-biokepi-dev"
         ~dockerfile:(coclobas ~with_gcloud:true ~with_gcloudnfs:true
                        ~with_biokepi_user:true ~with_secotrec_gke:true
-                       ~ketrew:(`Branch "master") ~coclobas:(`Branch "master") ());
-      make "secotrec-default" ~dockerfile:(secotrec ());
+                       ~ketrew:(`Branch "master")
+                       ~coclobas:(`Branch "master") ())
+        ~tests:[
+          Test.test_dashdashversion "ketrew" "3.0.0+dev";
+          Test.test_dashdashversion "coclobas" "0.0.0";
+        ];
+      make "secotrec-default" ~dockerfile:(secotrec ())
+        ~tests:[
+          Test.test_dashdashversion "ketrew" "3.0.0+dev";
+          Test.test_dashdashversion "coclobas" "0.0.0";
+          Test.test_dashdashversion "secotrec-gke" "0.0.0";
+          Test.test_dashdashversion "secotrec-local" "0.0.0";
+          Test.succeeds "nslookup hammerlab.org";
+          Test.succeeds "gcloud version";
+          Test.succeeds "kubectl version --client";
+        ];
     ]
 
 end
@@ -358,10 +422,19 @@ module Test_build = struct
 
   let build_all_workflow l =
     let open Ketrew.EDSL in
+    let tmp_dir = "/tmp/secotrec-local-shared-temp" in
+    let run_program p =
+      Coclobas_ketrew_backend.Plugin.local_docker_program
+        ~base_url:"http://coclo:8082"
+        ~image:"ubuntu"
+        ~tmp_dir
+        ~volume_mounts:[
+          `Local ("/var/run/docker.sock", "/var/run/docker.sock");
+        ]
+        p in
     let build_one image =
       let branch = Image.branch image in
       let dockerfile = Image.dockerfile image in
-      let tmp_dir = "/tmp/secotrec-local-shared-temp" in
       let witness_file =
         sprintf "docker-build-%s-%s"
           branch
@@ -371,13 +444,7 @@ module Test_build = struct
         ~name:(sprintf "Make %s" branch)
         ~make:(
           let dirname = sprintf "/tmp/build-%s" branch in
-          Coclobas_ketrew_backend.Plugin.local_docker_program
-            ~base_url:"http://coclo:8082"
-            ~image:"ubuntu"
-            ~tmp_dir
-            ~volume_mounts:[
-              `Local ("/var/run/docker.sock", "/var/run/docker.sock");
-            ]
+          run_program
             Program.(
               chain [
                 sh "apt-get update -y";
@@ -394,9 +461,36 @@ module Test_build = struct
             )
         )
     in
+    let with_tests image =
+      match Image.tests image with
+      | [] -> build_one image |> depends_on
+      | more ->
+        let tests =
+          List.map more ~f:(fun t ->
+              Program.(
+                chain [
+                  exec ["echo"; sprintf "Running test %s" t.Test.name];
+                  exec [
+                    "docker";"run";
+                    sprintf "hammerlab/keredofi-test:%s" (Image.tag image);
+                    "bash"; "-c"; Test.to_shell t;
+                  ]
+                ]
+              )) in
+        workflow_node without_product ~name:(sprintf "Test %s" (Image.show image))
+          ~edges:[depends_on (build_one image)]
+          ~make:(
+            run_program Program.(
+                chain [
+                  sh "apt-get update -y";
+                  sh "apt-get install -y docker.io";
+                  chain tests
+                ]))
+        |> depends_on
+    in
     workflow_node without_product
       ~name:"Test-Build All Images"
-      ~edges:(List.map l ~f:(fun v -> build_one v |> depends_on))
+      ~edges:(List.map l ~f:(fun v -> with_tests v))
 
 
 end
