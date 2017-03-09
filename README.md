@@ -50,20 +50,41 @@ Notes:
 
 ### Dockerized
 
-Get the image and enter the container:
+#### Getting the Docker image
 
+    # Get the docker image
     docker pull hammerlab/secotrec
-    docker run -v /var/run/docker.sock:/var/run/docker.sock -it hammerlab/secotrec bash
 
-If you do not plan to use `secotrec-local` you don't need the
-Docker socket (`-v /var/run/docker.sock:/var/run/docker.sock`),
-see `docker run --help` for more options.
+#### Setup for secrotec-gke
+
+    # Enter the container for GKE use case
+    docker run -e KETREW_CONFIGURATION -it hammerlab/secotrec bash
+
+#### Setup secrotec-local
+
+    # Enter the container for local use case
+    docker run \
+      -v /var/run/docker.sock:/var/run/docker.sock \
+      -e KETREW_CONFIGURATION \
+      -it hammerlab/secotrec \
+      bash
 
 If you do use `secotrec-local`, please mind that we cannot access the Ketrew
 server from the current container (which is in a different network). We can jump
 to another container which is in the right network:
 
     secotrec-local docker-compose exec coclo opam config exec bash
+
+#### Configure your gcloud utility
+
+Once you are inside the container, you first need to configure your gcloud
+utilities for proper access to GCloud services:
+
+    # Login to your acount
+    gcloud auth login
+
+    # Set your GKE project
+    gcloud set project YOUR_GKE_PROJECT
 
 Usage
 -----
