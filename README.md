@@ -283,4 +283,5 @@ happy, just go there and `git push --all`.
 Submit a Ketrew workflow that test-builds all the `Dockerfiles` (for now this
 expects a `secotrec-local`-like setup):
 
+    eval `secotrec-local env`
     do=test secotrec-make-dockerfiles
