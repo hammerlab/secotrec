@@ -455,13 +455,20 @@ end
 
 module Test_build = struct
 
-  let build_all_workflow l =
+  let build_all_workflow ~coclobas_tmp_dir ~coclobas_base_url l =
     let open Ketrew.EDSL in
-    let tmp_dir = "/tmp/secotrec-local-shared-temp" in
+    let tmp_dir =
+      (* 
+         This directory is mounted by the Ketrew and Coclobas containers as
+         well as all the local-docker jobs (as
+         `Coclobas_ketrew_backend.Plugin.extra_mount_container_side`).
+      *)
+      coclobas_tmp_dir
+    in
     let run_program p =
       Coclobas_ketrew_backend.Plugin.local_docker_program
-        ~base_url:"http://coclo:8082"
-        ~image:"ubuntu"
+        ~base_url:coclobas_base_url
+        ~image:"hammerlab/keredofi:ubuntu-docker"
         ~tmp_dir
         ~volume_mounts:[
           `Local ("/var/run/docker.sock", "/var/run/docker.sock");
@@ -482,16 +489,17 @@ module Test_build = struct
           run_program
             Program.(
               chain [
-                sh "apt-get update -y";
-                sh "apt-get install -y docker.io";
                 shf "mkdir -p %s" dirname;
                 shf "cd %s" dirname;
                 shf "echo %s > Dockerfile"
                   (Dockerfile.string_of_t dockerfile |> Filename.quote);
                 shf "docker build -t hammerlab/keredofi-test:%s ." branch;
-                shf "mkdir -p /shared";
-                shf "printf \"Done: $(date -R)\\n\" > /coclobas-ketrew-plugin-playground/%s" witness_file;
-                shf "chmod 777 /coclobas-ketrew-plugin-playground/%s" witness_file;
+                shf "printf \"Done: $(date -R)\\n\" > %s/%s"
+                  Coclobas_ketrew_backend.Plugin.extra_mount_container_side
+                  witness_file;
+                shf "chmod 777 %s/%s"
+                  Coclobas_ketrew_backend.Plugin.extra_mount_container_side
+                  witness_file;
               ]
             )
         )
@@ -514,13 +522,7 @@ module Test_build = struct
               )) in
         workflow_node without_product ~name:(sprintf "Test %s" (Image.show image))
           ~edges:[depends_on (build_one image)]
-          ~make:(
-            run_program Program.(
-                chain [
-                  sh "apt-get update -y";
-                  sh "apt-get install -y docker.io";
-                  chain tests
-                ]))
+          ~make:(run_program Program.(chain tests))
         |> depends_on
     in
     workflow_node without_product
@@ -551,9 +553,12 @@ let () =
       dir;
     ()
   | Some "test" ->
+    let coclobas_base_url = env_exn "COCLOBAS_BASE_URL" in
+    let coclobas_tmp_dir = env_exn "COCLOBAS_TMP_DIR" in
     Ketrew.Client.submit_workflow
       ~add_tags:["secotrec"; "make-dockerfiles"]
-      (Test_build.build_all_workflow Image.all)
+      (Test_build.build_all_workflow
+         ~coclobas_tmp_dir ~coclobas_base_url Image.all)
   | None | Some "view" ->
     List.iter Image.all ~f:(fun im ->
         printf "Branch `%s`:\n\n```\n%s\n```\n\n" (Image.branch im)
