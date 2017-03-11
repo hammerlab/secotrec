@@ -102,6 +102,9 @@ let example () =
       download
         "https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37decoy_20160927.tgz"
         ~in_directory:(biokepi_work#mount // "workdir/reference-genome");
+      download
+        "https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37_20161007.tgz"
+        ~in_directory:(biokepi_work#mount // "workdir/reference-genome");
     ] in
   Deployment.make "Light-local" ~node
     ?tlstunnel

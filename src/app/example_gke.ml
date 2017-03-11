@@ -177,6 +177,9 @@ let example_1 () =
       download
         "https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37decoy_20160927.tgz"
         ~in_directory:(leading_extra_nfs // "workdir/reference-genome");
+      download
+        "https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37_20161007.tgz"
+        ~in_directory:(leading_extra_nfs // "workdir/reference-genome");
     ] in
   Deployment.make "Ex-almost-full"
     ~node:(Deployment.Node.gcloud node)
