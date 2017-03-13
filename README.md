@@ -285,3 +285,37 @@ expects a `secotrec-local`-like setup):
 
     eval `secotrec-local env`
     do=test secotrec-make-dockerfiles
+
+### Secotrec-aws-node
+
+When in the environment `WITH_AWS_NODE` is `true`, and application
+`secotrec-aws-node` is built, see:
+
+    secotrec-aws-node --help
+    
+For now the this uses the AWS API to setup a “ready-to-use” EC2 server.
+
+The build requires `master` versions of: `aws`, `aws-ec2`, and
+`ppx_deriving_cmdliner`.
+
+Usage:
+
+    # Set your AWS credentials:
+    export AWS_KEY_ID=AKSJDIEJDEIJDEKJJKXJXIIEJDIE
+    export AWS_SECRET_KEY=dliejsddlj09823049823sdljsd/sdelidjssleidje
+    # Configure once:
+    secotrec-aws-node config --path /path/to/store/config-and-more/ \
+        --node-name awsuser-dev-0 \
+        --ports 22,443 \
+        --region us-east-1 \
+        --pub-key-file ~/.ssh/id_rsa.pub
+    # Then play as much as needed:
+    secotrec-aws-node show-configuration --path /path/to/store/config-and-more/
+    secotrec-aws-node up --path /path/to/store/config-and-more/ [--dry-run]
+    secotrec-aws-node down --path /path/to/store/config-and-more/ [--dry-run]
+    secotrec-aws-node ssh --path /path/to/store/config-and-more/
+
+Everything should be idempotent (but some “Waiting for” functions may timeout
+for now).
+
+More to come…

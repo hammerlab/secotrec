@@ -4,8 +4,8 @@ open Solvuu_build.Std
 let project_name = "secotrec"
 let version = "0.0.0-dev"
 
-let build_tests =
-  try Sys.getenv "WITH_TESTS" = "true" with _ -> false
+let build_aws_cli_app =
+  try Sys.getenv "WITH_AWS_NODE" = "true" with _ -> false
 
 let findlib_deps = [
   "genspio";
@@ -41,6 +41,31 @@ let example_local : Project.item =
     ~file:"src/app/example_local.ml"
     ~internal_deps:[lib]
 
+let aws_node =
+  if build_aws_cli_app
+  then
+    Some begin
+      Project.app ("secotrec-aws-node")
+        ~bin_annot:()
+        ~thread:()
+        ~file:"src/app/aws_node.ml"
+        ~findlib_deps:[
+          "aws";
+          "aws-ec2";
+          "aws.lwt";
+          "nonstd";
+          "sosa";
+          "pvem_lwt_unix";
+          "ppx_deriving.std";
+          "ppx_deriving_cmdliner";
+          "ppx_deriving_yojson"
+        ]
+    end
+  else
+    None
+
+
+
 let ocamlinit_postfix = [
   sprintf "open %s" (String.capitalize_ascii project_name);
 ]
@@ -52,4 +77,5 @@ let () =
         Some example_gke;
         Some example_local;
         Some make_dockerfiles;
+        aws_node;
       ])
