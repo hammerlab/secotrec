@@ -86,9 +86,9 @@ let configuration =
                    that's why the default is `true`)"
             ~example:"false";
           env "DOCKER_IMAGE"
-            ~example:"hammerlab/biokepi-run:some-tag"
+            ~example:"organization/some-repo:some-tag"
             ~help:"The docker image used for the Biokepi jobs \
-                   (default `hammerlab/biokepi-run`).";
+                   (default `hammerlab/keredofi:biokepi-run`).";
           annoying_url "GATK_JAR_URL" "GenomeAnalysisTK_35.jar" "the Broad's GATK";
           annoying_url "MUTECT_JAR_URL" "muTect-1.1.6-10b1ba92.jar" "MuTect 1.x";
           annoying_url "NETMHC_TARBALL_URL" "netMHC-3.4a.Linux.tar.gz" "NetMHC";

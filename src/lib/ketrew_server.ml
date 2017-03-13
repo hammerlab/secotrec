@@ -5,7 +5,7 @@ open Common
 type t = {
   auth_token: string;
   db: Postgres.t;
-  image: string [@default "hammerlab/coclobas:latest"];
+  image: string [@default "hammerlab/keredofi:coclobas-gke-biokepi-dev"];
   nfs_mounts: Nfs.Mount.t list;
   port: int [@default 8080 ];
   local_volumes: (string * string) list;

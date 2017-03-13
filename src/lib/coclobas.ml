@@ -7,6 +7,7 @@ type t = {
   port: int [@default 8082];
   tmp_dir: string [@default "/tmp/coclosecolocal"];
   db:Uri.t;
+  image: string [@default "hammerlab/keredofi:coclobas-gke-biokepi-dev"];
   cluster: 
     [ `GKE of Gke_cluster.t | `Local of int ] [@main ];
 } [@@deriving make]
@@ -95,7 +96,7 @@ let to_service t =
         sprintf "%s:%s" t.tmp_dir t.tmp_dir;
       ] in
   Docker_compose.Configuration.service t.name
-    ~image:"hammerlab/coclobas:latest"
+    ~image:t.image
     ~ports:[sprintf "%d:%d" t.port t.port]
     ~volumes
     ~command:["/bin/bash"; "-c"; shell_cmd]

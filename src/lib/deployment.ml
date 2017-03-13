@@ -294,7 +294,8 @@ module Run = struct
           Docker_compose.ensure_software
           :: List.map t.extra_nfs_servers ~f:(fun nfs ->
               exec [ (* We use the `gcoudnfs` script in the coclobas container *)
-                "sudo"; "docker"; "run"; "hammerlab/coclobas";
+                "sudo"; "docker"; "run";
+                "hammerlab/keredofi:coclobas-gke-biokepi-dev";
                 "sh"; "-c";
                 genspio_to_one_liner ~name:"ensure-nfs"
                   (Nfs.Fresh.ensure nfs.Extra_nfs_server.server);
@@ -398,7 +399,8 @@ module Run = struct
                   (Gcloud_instance.instance_is_up (Nfs.Fresh.instance enfs))
                   ~t:[
                     exec [
-                      "sudo"; "docker"; "run"; "hammerlab/coclobas";
+                      "sudo"; "docker"; "run";
+                      "hammerlab/keredofi:coclobas-gke-biokepi-dev";
                       "sh"; "-c";
                       genspio_to_one_liner ~name:"destroy-nfs"
                         (Nfs.Fresh.destroy enfs);
