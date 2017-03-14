@@ -9,23 +9,24 @@ let make l : t = l
 
 let download url ~in_directory = Download {url; in_directory}
 
-let downloader =
+let make_downloader ~tmpdir =
   let open Genspio_edsl in
   let url =
     "https://www.dropbox.com/s/2jbydjb9m7cer14/downloader.sh?raw=1" in
-  let path = "/tmp/downloader.sh" in
+  let path = tmpdir // "downloader.sh" in
   object (self)
     method ensure =
       ensure ~name:"Getting downloader"
         (file_exists (string path)) [
+        exec ["mkdir"; "-p"; tmpdir];
         exec ["curl"; "-k"; "-L"; url; "-o"; path]
       ]
-    method call ~tmpdir url =
+    method call url =
       seq [
         self#ensure;
         call [string "sh"; string path;
               string "-u"; url;
-              string "-t"; tmpdir;]
+              string "-t"; string tmpdir;]
       ]
   end
 
@@ -38,6 +39,7 @@ let item_to_workflow item =
       sprintf "download-witness-%s" Digest.(string url |> to_hex) in
     let product = single_file (in_directory // witness) in
     let name = sprintf "Download %s to %s" url in_directory in
+    let digest_url = Digest.(string url |> to_hex) in
     let program =
       let open Genspio_edsl in
       let cmd c =
@@ -45,12 +47,15 @@ let item_to_workflow item =
           exec ["printf"; "Command: %s\\n"; c];
           exec ["bash"; "-c"; c];
         ] in
+      let downloader =
+        make_downloader
+          ~tmpdir:(in_directory // sprintf "tmp-%s" digest_url) in
       let p =
         seq_succeeds_or ~name:"preparation" ~clean_up:[fail] [
           cmd "whoami";
           cmd "ls -la";
           cmd "df -h";
-          downloader#call ~tmpdir:(in_directory // "tmp" |> string) (string url);
+          downloader#call (string url);
           write_output
             ~stdout:(in_directory // witness |> string)
             (exec ["date"]);

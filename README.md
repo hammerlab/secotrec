@@ -19,7 +19,8 @@ It comes with 2 preconfigured “examples:”
    
 Both examples have the option of preparing the default biokepi-work directory
 with
-[`b37decoy_20160927.tgz`](https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37decoy_20160927.tgz).
+[`b37decoy_20160927.tgz`](https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37decoy_20160927.tgz) and
+[`b37_20161007.tgz`](https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37_20161007.tgz).
 
 For those administration purposes, we also provide `secotrec-make-dockerfiles`,
 as `Dockerfile` generation tool.
