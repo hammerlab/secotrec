@@ -19,7 +19,6 @@ let lib : Project.item =
     ~findlib_deps
     ~dir:"src/lib"
     ~style:(`Pack project_name)
-    ~pkg:project_name
 
 let make_dockerfiles =
   Project.app ("secotrec-make-dockerfiles")
