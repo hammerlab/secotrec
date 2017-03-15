@@ -1,13 +1,13 @@
 open Common
 
 type t = {
+  image: string [@default "hammerlab/keredofi:coclobas-gke-biokepi-dev"];
+  backend_address: string option;
+  backend_port: int;
+  frontend_address: string option;
+  frontend_port: int;
+  certificate: [ `Fake | `Mount of (string * string * string)] [@default `Fake];
   name: string [@main ];
-        image: string [@default "hammerlab/coclobas:latest"];
-        backend_address: string option;
-        backend_port: int;
-        frontend_address: string option;
-        frontend_port: int;
-        certificate: [ `Fake | `Mount of (string * string * string)] [@default `Fake];
 } [@@deriving make]
 
 let to_service t =

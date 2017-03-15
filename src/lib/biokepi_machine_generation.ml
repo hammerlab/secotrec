@@ -40,7 +40,7 @@ let allow_daemonize =
   with _ -> true
 let image =
   try env_exn "DOCKER_IMAGE"
-  with _ -> "hammerlab/biokepi-run"
+  with _ -> "hammerlab/keredofi:biokepi-run"
 let env_exn_tool_loc s tool =
   try (`Wget (Sys.getenv s)) with _ ->
     `Fail (sprintf "No location provided for %s" tool)

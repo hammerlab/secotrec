@@ -8,6 +8,7 @@ val make :
   ?port:int ->
   ?tmp_dir: string ->
   db:Postgres.t ->
+  ?image: string ->
   [ `GKE of Gke_cluster.t | `Local of int ] ->
   t
 
