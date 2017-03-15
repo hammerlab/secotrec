@@ -85,12 +85,15 @@ module Genspio_edsl = struct
   let sayl fmt l =
     call (string "printf" :: (sprintf "SECOTREC: %s\\n" fmt |> string) :: l)
 
-  let cat_markdown file tag =
+  let output_markdown_code tag f =
     seq [
       exec ["printf"; sprintf "``````````%s\\n" tag];
-      call [string "cat"; file];
+      f;
       exec ["printf"; sprintf "\\n``````````\\n"];
     ]
+    
+  let cat_markdown file tag =
+    output_markdown_code tag @@ call [string "cat"; file]
 
   let sanitize_name n =
     String.map n ~f:(function
