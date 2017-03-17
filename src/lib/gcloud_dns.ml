@@ -8,7 +8,7 @@ let do_transaction what ~dns_zone ~node dnsname =
   let transaction_file = Filename.temp_file "secotrec" "transaction.yaml" in
   let transaction_file_copy =
     Filename.temp_file "secotrec" "transaction-copy.yaml" in
-  printf "SECOTREC: GCloud-DNS transaction: %s\n\
+  Printf.printf "SECOTREC: GCloud-DNS transaction: %s\n\
           * IP-file: %s\n\
           * DNS-zone-file: %s\n\
           * Transaction-file: %s\n\
