@@ -31,8 +31,9 @@ module Pin = struct
         seq_succeeds_or ~name:("opam-pins-upgrade")
           ~silent:false
           ~clean_up:[fail] [
+          exec ["opam"; "upgrade"];
           exec (
-            ["opam"; "reinstall"; "--yes"]
+            ["opam"; "upgrade"; "--yes"]
             @ (List.map t_list ~f:(fun t -> t.package))
           );
         ];
