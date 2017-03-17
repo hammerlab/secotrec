@@ -7,7 +7,7 @@ type t = {
   port: int [@default 8082];
   tmp_dir: string [@default "/tmp/coclosecolocal"];
   db:Uri.t;
-  image: string [@default "hammerlab/keredofi:coclobas-gke-biokepi-dev"];
+  image: string [@default "hammerlab/keredofi:coclobas-gke-biokepi-default"];
   cluster: 
     [ `GKE of Gke_cluster.t | `Local of int ] [@main ];
 } [@@deriving make]
