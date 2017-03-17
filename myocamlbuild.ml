@@ -10,6 +10,7 @@ let build_aws_cli_app =
 let findlib_deps = [
   "genspio";
   "coclobas.ketrew_backend";
+  "ppx_deriving_cmdliner";
 ]
 
 let lib : Project.item =
@@ -40,6 +41,13 @@ let example_local : Project.item =
     ~file:"src/app/example_local.ml"
     ~internal_deps:[lib]
 
+let simple_efs : Project.item =
+  Project.app ("secotrec-aws-efs")
+    ~bin_annot:()
+    ~thread:()
+    ~file:"src/app/aws_efs.ml"
+    ~internal_deps:[lib]
+
 let aws_node =
   if build_aws_cli_app
   then
@@ -56,8 +64,8 @@ let aws_node =
           "sosa";
           "pvem_lwt_unix";
           "ppx_deriving.std";
+          "ppx_deriving_yojson";
           "ppx_deriving_cmdliner";
-          "ppx_deriving_yojson"
         ]
     end
   else
@@ -76,5 +84,6 @@ let () =
         Some example_gke;
         Some example_local;
         Some make_dockerfiles;
+        Some simple_efs;
         aws_node;
       ])
