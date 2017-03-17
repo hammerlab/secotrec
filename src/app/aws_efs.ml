@@ -11,9 +11,12 @@ type efs_test = {
 
 
 let run_genspio_over_ssh efs_test g =
-  Secotrec.Common.write_file "/tmp/gsp.sh" ~content:(Genspio.Language.to_many_lines g);
-  Secotrec.Common.cmdf ~returns:0 "scp /tmp/gsp.sh %s:gsp1.sh" efs_test.ssh_aws_node;
-  Secotrec.Common.cmdf ~returns:0 "ssh %s bash gsp1.sh" efs_test.ssh_aws_node;
+  let tmp = Filename.temp_file "genspio-efs-test" ".sh" in
+  Secotrec.Common.write_file tmp ~content:(Genspio.Language.to_many_lines g);
+  Secotrec.Common.cmdf ~returns:0 "scp %s %s:%s"
+    tmp efs_test.ssh_aws_node (Filename.basename tmp);
+  Secotrec.Common.cmdf ~returns:0 "ssh %s bash %s"
+    efs_test.ssh_aws_node (Filename.basename tmp);
   ()
 
 let efs_up aws_cli efs_test =
