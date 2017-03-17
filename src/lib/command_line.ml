@@ -192,6 +192,21 @@ let deployment_commands (deployment : unit -> Deployment.t) =
                  @@ info [] ~docv:"PATH"
                    ~doc:"Path to the configuration directory.")
         ) in
+  let docker_compose_config =
+    sub_command
+      ~info:Term.(info "compose-configuration"
+                    ~version ~sdocs:"COMMON OPTIONS" ~man:[]
+                    ~doc:"Generate a confguration file for Docker-compose.")
+      ~term: Term.(
+          pure (fun deployment path ->
+              Deployment.Run.Generate.docker_compose_configuration
+                ?path deployment)
+          $ deployment_arg
+          $ Arg.(value
+                 @@ pos 0 (some string) None
+                 @@ info [] ~docv:"PATH"
+                   ~doc:"Path to the configuration file.")
+        ) in
   let preparation_workflow =
     sub_command
       ~info:Term.(info "prepare"
@@ -276,6 +291,7 @@ let deployment_commands (deployment : unit -> Deployment.t) =
     up; down; status; top; psql;
     coclobas_client; make_command_alias coclobas_client "cc";
     ketrew_configuration; biokepi_machine; useful_env;
+    docker_compose_config;
     preparation_workflow; test_biokepi_machine;
     backup_database; restore_database_backup;
     coclobas_logs; ketrew_logs;
