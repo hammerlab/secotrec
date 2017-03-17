@@ -29,6 +29,7 @@ depends: [
   "coclobas"
   "ketrew"
   "dockerfile"
+  "ppx_deriving_cmdliner"
 ]
 available: [
   ocaml-version >= "4.03.0"
