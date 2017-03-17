@@ -329,7 +329,8 @@ module Image = struct
                        ~coclobas:(`Version "0.0.1") ())
         ~tests:[
           Test.test_dashdashversion "ketrew" "3.0.0+dev";
-          Test.test_dashdashversion "coclobas" "0.0.1";
+          Test.test_dashdashversion "coclobas" "0.0.0";
+          Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.1";
         ];
       make "coclobas-gke-biokepi-dev"
         ~description:"Image similar to `coclobas-gke-biokepi-default` but \
@@ -340,7 +341,8 @@ module Image = struct
                        ~coclobas:(`Branch "master") ())
         ~tests:[
           Test.test_dashdashversion "ketrew" "3.0.0+dev";
-          Test.test_dashdashversion "coclobas" "0.0.2-dev";
+          Test.test_dashdashversion "coclobas" "0.0.0";
+          Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.2-dev";
         ];
       make "secotrec-default" ~dockerfile:(secotrec ())
         ~description:"OCaml/Opam environment with the `master` version of \
