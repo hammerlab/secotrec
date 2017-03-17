@@ -38,6 +38,7 @@ type t = {
 module To_genspio = struct
   open Genspio_edsl
 
+  (** Function {!Common.sayl} but ith an additional prefix/prompt. *)
   let saylp t fmt l =
     sayl ("[EFS:%s] " ^ fmt) (string t.name :: l)
 
@@ -110,6 +111,10 @@ module To_genspio = struct
       ] in
     aws_get_or_create t "mount-target-id" ~get ~create
 
+  (**
+     Assuming you are on an EC2 instance, [curl] a piece of meta-data,
+     cf.
+     {{:http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html}EC2 Instance Metadata Docs}. *)
   let curl_metadata_item path =
     let uri =
       string_concat [string "http://169.254.169.254/latest/meta-data/"; path] in
@@ -126,7 +131,6 @@ module To_genspio = struct
     | `Value v -> string v
     | `From_metadata ->
       let macs_path = string "network/interfaces/macs/" in
-      (* "http://169.254.169.254/latest/meta-data/network/interfaces/macs/" in *)
       let mac = curl_metadata_item macs_path in
       curl_metadata_item
       @@ string_concat [macs_path; mac; string "subnet-id"]
