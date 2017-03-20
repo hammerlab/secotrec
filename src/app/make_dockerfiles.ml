@@ -203,6 +203,7 @@ module Dockerfiles = struct
       or_empty with_gcloudnfs install_gcloudnfs;
       or_empty with_secotrec_gke secotrec_gke_stuff;
       begin match coclobas with
+      | `Version v -> opam_pins ["coclobas", v]
       | `Branch b -> opam_pins [github_pin "coclobas" b]
       end;
     ]
@@ -317,7 +318,23 @@ module Image = struct
       make "coclobas-gke-dev"
         ~dockerfile:(coclobas ~with_gcloud:true ~ketrew:(`Branch "master")
                        ~coclobas:(`Branch "master") ());
+      make "coclobas-gke-biokepi-default"
+        ~description:"The default image used by Secotrec for GKE/Local \
+                      deployments, it has `gcloud`, `gcloudnfs`, the Biokepi \
+                      NFS-friendly user, TLS-tunnel, Coclobas 0.0.1 and \
+                      Ketrew `master` branch (until next version)."
+        ~dockerfile:(coclobas ~with_gcloud:true ~with_gcloudnfs:true
+                       ~with_biokepi_user:true ~with_secotrec_gke:true
+                       ~ketrew:(`Branch "master")
+                       ~coclobas:(`Version "0.0.1") ())
+        ~tests:[
+          Test.test_dashdashversion "ketrew" "3.0.0+dev";
+          Test.test_dashdashversion "coclobas" "0.0.0";
+          Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.1";
+        ];
       make "coclobas-gke-biokepi-dev"
+        ~description:"Image similar to `coclobas-gke-biokepi-default` but \
+                      with Coclobas pinned to its `master` branch."
         ~dockerfile:(coclobas ~with_gcloud:true ~with_gcloudnfs:true
                        ~with_biokepi_user:true ~with_secotrec_gke:true
                        ~ketrew:(`Branch "master")
@@ -325,6 +342,7 @@ module Image = struct
         ~tests:[
           Test.test_dashdashversion "ketrew" "3.0.0+dev";
           Test.test_dashdashversion "coclobas" "0.0.0";
+          Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.2-dev";
         ];
       make "secotrec-default" ~dockerfile:(secotrec ())
         ~description:"OCaml/Opam environment with the `master` version of \

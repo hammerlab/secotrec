@@ -1,7 +1,7 @@
 open Common
 
 type t = {
-  image: string [@default "hammerlab/keredofi:coclobas-gke-biokepi-dev"];
+  image: string [@default "hammerlab/keredofi:coclobas-gke-biokepi-default"];
   backend_address: string option;
   backend_port: int;
   frontend_address: string option;
