@@ -1,3 +1,8 @@
 .merlin
 .ocamlinit
 _build/
+/secotrec-aws-efs.byte
+/secotrec-aws-node.byte
+/secotrec-gke.byte
+/secotrec-local.byte
+/secotrec-make-dockerfiles.byte
