@@ -106,6 +106,9 @@ module Dockerfiles = struct
     object (self)
       method create =
         comment "A user: biokepi with a consistent UID: 20042" @@@ [
+          bash_c "echo 'biokepi ALL=(ALL:ALL) NOPASSWD:ALL' > /etc/sudoers.d/biokepi && \
+                  chmod 440 /etc/sudoers.d/biokepi && \
+                  chown root:root /etc/sudoers.d/biokepi";
           bash_c "adduser --uid 20042 --disabled-password --gecos '' biokepi && \
                   passwd -l biokepi && \
                   chown -R biokepi:biokepi /home/biokepi";
