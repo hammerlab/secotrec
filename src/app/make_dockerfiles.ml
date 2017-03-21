@@ -123,7 +123,20 @@ module Dockerfiles = struct
       method create_and_switch_to = self#create @@ self#switch_to
     end
 
-  let biokepi_run () =
+  let install_gcloud =
+    let open Dockerfile in
+    comment "Installing GCloud command-line tool with kubectl" @@@ [
+      apt_get_install ["python"; "build-essential"];
+      env ["CLOUDSDK_CORE_DISABLE_PROMPTS", "true"];
+      bash_c ~sudo:false "curl https://sdk.cloud.google.com | bash";
+      env ["PATH", "${HOME}/google-cloud-sdk/bin/:${PATH}"];
+      run "gcloud components install kubectl";
+    ]
+
+
+  let biokepi_run
+      ?(with_gcloud = false)
+      () =
     let open Dockerfile in
     let biokepi_dependencies = [
       "cmake"; "r-base"; "tcsh"; "libx11-dev";
@@ -164,16 +177,8 @@ module Dockerfiles = struct
     @@ install_wkhtmltopdf
     @@ oracle_java_7
     @@ biokepi_user#create_and_switch_to
-
-  let install_gcloud =
-    let open Dockerfile in
-    comment "Installing GCloud command-line tool with kubectl" @@@ [
-      apt_get_install ["python"; "build-essential"];
-      env ["CLOUDSDK_CORE_DISABLE_PROMPTS", "true"];
-      bash_c ~sudo:false "curl https://sdk.cloud.google.com | bash";
-      env ["PATH", "/home/opam/google-cloud-sdk/bin/:${PATH}"];
-      run "gcloud components install kubectl";
-    ]
+    @@ or_empty with_gcloud install_gcloud
+    @@ entrypoint "bash"
 
   let coclobas
       ?(with_gcloud = false)
@@ -316,6 +321,16 @@ module Image = struct
                       workflows require, and a special `biokepi` user with a \
                       fixed UID (useful for shared file-systems)."
         ~dockerfile:(biokepi_run ());
+      make "biokepi-run-gcloud"
+        ~description:"Image similar to `biokepi-run` but with the `gcloud` and \
+                      `gsutil` tools installed (for the `biokepi` user)"
+        ~dockerfile:(biokepi_run ~with_gcloud:true ())
+        ~tests:[
+          Test.succeeds "gcloud version";
+          Test.succeeds "gsutil version";
+          Test.succeeds "kubectl version --client";
+          Test.succeeds "whoami | grep biokepi";
+        ];
       make "coclobas-gke-dev"
         ~dockerfile:(coclobas ~with_gcloud:true ~ketrew:(`Branch "master")
                        ~coclobas:(`Branch "master") ());
