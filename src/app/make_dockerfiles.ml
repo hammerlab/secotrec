@@ -216,10 +216,8 @@ module Dockerfiles = struct
       opam_pins
         ~more_installs:["tls"]
         [
-          github_pin "coclobas" "master";
           github_pin "ketrew" "master";
           github_pin "biokepi" "master";
-          github_pin "genspio" "master";
           github_pin "secotrec" "master";
         ];
     ]
