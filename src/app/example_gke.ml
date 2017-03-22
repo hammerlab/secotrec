@@ -55,6 +55,8 @@ let configuration =
                  string.";
         env "cluster_max_nodes" ~default:"15"
           ~help:"The maximal size of the Kubernetes cluster.";
+        env "cluster_machine_type" ~default:"n1-highmem-8"
+          ~help:"The machine-type of the Kubernetes compute nodes.";
       ]
       @ Util.common_opam_pins#configuration
     end;
@@ -115,6 +117,7 @@ let example_1 () =
       (Uri.of_string "postgresql://pg/?user=postgres&password=kpass") in
   let cluster =
     Gke_cluster.make
+      ~machine_type:(conf "cluster_machine_type")
       ~max_nodes:(conf "cluster_max_nodes"|> Int.of_string
                   |> Option.value_exn
                     ~msg:"cluster_max_nodes should be an integer")
