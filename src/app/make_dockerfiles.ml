@@ -106,6 +106,9 @@ module Dockerfiles = struct
     object (self)
       method create =
         comment "A user: biokepi with a consistent UID: 20042" @@@ [
+          bash_c "echo 'biokepi ALL=(ALL:ALL) NOPASSWD:ALL' > /etc/sudoers.d/biokepi && \
+                  chmod 440 /etc/sudoers.d/biokepi && \
+                  chown root:root /etc/sudoers.d/biokepi";
           bash_c "adduser --uid 20042 --disabled-password --gecos '' biokepi && \
                   passwd -l biokepi && \
                   chown -R biokepi:biokepi /home/biokepi";
@@ -120,7 +123,20 @@ module Dockerfiles = struct
       method create_and_switch_to = self#create @@ self#switch_to
     end
 
-  let biokepi_run () =
+  let install_gcloud =
+    let open Dockerfile in
+    comment "Installing GCloud command-line tool with kubectl" @@@ [
+      apt_get_install ["python"; "build-essential"];
+      env ["CLOUDSDK_CORE_DISABLE_PROMPTS", "true"];
+      bash_c ~sudo:false "curl https://sdk.cloud.google.com | bash";
+      env ["PATH", "${HOME}/google-cloud-sdk/bin/:${PATH}"];
+      run "gcloud components install kubectl";
+    ]
+
+
+  let biokepi_run
+      ?(with_gcloud = false)
+      () =
     let open Dockerfile in
     let biokepi_dependencies = [
       "cmake"; "r-base"; "tcsh"; "libx11-dev";
@@ -161,16 +177,8 @@ module Dockerfiles = struct
     @@ install_wkhtmltopdf
     @@ oracle_java_7
     @@ biokepi_user#create_and_switch_to
-
-  let install_gcloud =
-    let open Dockerfile in
-    comment "Installing GCloud command-line tool with kubectl" @@@ [
-      apt_get_install ["python"; "build-essential"];
-      env ["CLOUDSDK_CORE_DISABLE_PROMPTS", "true"];
-      bash_c ~sudo:false "curl https://sdk.cloud.google.com | bash";
-      env ["PATH", "/home/opam/google-cloud-sdk/bin/:${PATH}"];
-      run "gcloud components install kubectl";
-    ]
+    @@ or_empty with_gcloud install_gcloud
+    @@ entrypoint "bash"
 
   let coclobas
       ?(with_gcloud = false)
@@ -216,10 +224,8 @@ module Dockerfiles = struct
       opam_pins
         ~more_installs:["tls"]
         [
-          github_pin "coclobas" "master";
           github_pin "ketrew" "master";
           github_pin "biokepi" "master";
-          github_pin "genspio" "master";
           github_pin "secotrec" "master";
         ];
     ]
@@ -233,6 +239,17 @@ module Dockerfiles = struct
       apt_get_install ~sudo:false ["docker.io"];
     ]
 
+  let epidisco_dev () =
+    let open Dockerfile in
+    secotrec () @@@ [
+      apt_get_install ["vim"; "emacs"; "tmux"; "git-hub";
+                       "samtools"; "vcftools"];
+      opam_pins
+        [
+          github_pin "epidisco" "master";
+          github_pin "ogene" "master";
+        ];
+    ]
 
 end
 
@@ -248,10 +265,11 @@ module Test = struct
     match t.procedure with
     | `Genspio g -> Genspio.Language.to_many_lines g
 
-  let gassert name cond =
+  let gassert ?(on_failure = []) name cond =
     let open Genspio.EDSL in
     if_seq cond ~t:[] ~e:[
       eprintf (string "\n\nTest %s FAILED!\n\n") [string name];
+      seq on_failure;
       fail;
     ]
 
@@ -259,8 +277,12 @@ module Test = struct
     let name = sprintf "%s-version" cmdname in
     let procedure =
       let open Genspio.EDSL in
+      let cv = exec [cmdname; "--version"] |> output_as_string in
       gassert name
-        (exec [cmdname; "--version"] |> output_as_string =$= (ksprintf string "%s\n" expect))
+        ~on_failure:[
+          eprintf (string "→ %s --version: ```\\n%s```\\n") [string cmdname; cv];
+        ]
+        (cv =$= (ksprintf string "%s\n" expect))
     in
     genspio name ~procedure
 
@@ -315,6 +337,16 @@ module Image = struct
                       workflows require, and a special `biokepi` user with a \
                       fixed UID (useful for shared file-systems)."
         ~dockerfile:(biokepi_run ());
+      make "biokepi-run-gcloud"
+        ~description:"Image similar to `biokepi-run` but with the `gcloud` and \
+                      `gsutil` tools installed (for the `biokepi` user)"
+        ~dockerfile:(biokepi_run ~with_gcloud:true ())
+        ~tests:[
+          Test.succeeds "gcloud version";
+          Test.succeeds "gsutil version";
+          Test.succeeds "kubectl version --client";
+          Test.succeeds "whoami | grep biokepi";
+        ];
       make "coclobas-gke-dev"
         ~dockerfile:(coclobas ~with_gcloud:true ~ketrew:(`Branch "master")
                        ~coclobas:(`Branch "master") ());
@@ -341,7 +373,8 @@ module Image = struct
                        ~coclobas:(`Branch "master") ())
         ~tests:[
           Test.test_dashdashversion "ketrew" "3.0.0+dev";
-          Test.test_dashdashversion "coclobas" "0.0.0";
+          (* coclobas --version gives: "0.0.2-dev+<commit-hash-prefix>": *)
+          Test.succeeds "coclobas --version | grep 0.0.2-dev";
           Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.2-dev";
         ];
       make "secotrec-default" ~dockerfile:(secotrec ())
@@ -363,6 +396,10 @@ module Image = struct
                       Secotrec \
                       [docs](https://github.com/hammerlab/secotrec#secotrec-make-dockerfiles))."
         ~dockerfile:(ubuntu_docker ());
+      make "epidisco-dev"
+        ~description:"Development/bioinformatics environment with Epidisco \
+                      and various tools (text editors, git-hub)."
+        ~dockerfile:(epidisco_dev ());
     ]
 
 end
