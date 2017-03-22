@@ -245,7 +245,6 @@ module Dockerfiles = struct
       apt_get_install ["vim"; "emacs"; "tmux"; "git-hub";
                        "samtools"; "vcftools"];
       opam_pins
-        (* ~more_installs:["ogene"] *)
         [
           github_pin "epidisco" "master";
           github_pin "ogene" "master";
@@ -374,7 +373,7 @@ module Image = struct
                        ~coclobas:(`Branch "master") ())
         ~tests:[
           Test.test_dashdashversion "ketrew" "3.0.0+dev";
-          (* Test.test_dashdashversion "coclobas" "0.0.2-dev"; *)
+          (* coclobas --version gives: "0.0.2-dev+<commit-hash-prefix>": *)
           Test.succeeds "coclobas --version | grep 0.0.2-dev";
           Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.2-dev";
         ];
