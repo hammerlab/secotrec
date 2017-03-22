@@ -239,6 +239,18 @@ module Dockerfiles = struct
       apt_get_install ~sudo:false ["docker.io"];
     ]
 
+  let epidisco_dev () =
+    let open Dockerfile in
+    secotrec () @@@ [
+      apt_get_install ["vim"; "emacs"; "tmux"; "git-hub";
+                       "samtools"; "vcftools"];
+      opam_pins
+        (* ~more_installs:["ogene"] *)
+        [
+          github_pin "epidisco" "master";
+          github_pin "ogene" "master";
+        ];
+    ]
 
 end
 
@@ -385,6 +397,10 @@ module Image = struct
                       Secotrec \
                       [docs](https://github.com/hammerlab/secotrec#secotrec-make-dockerfiles))."
         ~dockerfile:(ubuntu_docker ());
+      make "epidisco-dev"
+        ~description:"Development/bioinformatics environment with Epidisco \
+                      and various tools (text editors, git-hub)."
+        ~dockerfile:(epidisco_dev ());
     ]
 
 end
