@@ -103,8 +103,8 @@ let biokepi_machine =
       && cmd "groups"
       && cmd "hostname"
       && cmd "uname -a"
-      && cmd "export PATH=/home/opam/google-cloud-sdk/bin:$PATH"
-      && cmd "ls /home/opam/google-cloud-sdk/bin"
+      && cmd "export PATH=$HOME/google-cloud-sdk/bin:$PATH"
+      && cmd "ls $HOME/google-cloud-sdk/bin"
       && prog
     in
   |ocaml}
