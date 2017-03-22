@@ -254,10 +254,11 @@ module Test = struct
     match t.procedure with
     | `Genspio g -> Genspio.Language.to_many_lines g
 
-  let gassert name cond =
+  let gassert ?(on_failure = []) name cond =
     let open Genspio.EDSL in
     if_seq cond ~t:[] ~e:[
       eprintf (string "\n\nTest %s FAILED!\n\n") [string name];
+      seq on_failure;
       fail;
     ]
 
@@ -265,8 +266,12 @@ module Test = struct
     let name = sprintf "%s-version" cmdname in
     let procedure =
       let open Genspio.EDSL in
+      let cv = exec [cmdname; "--version"] |> output_as_string in
       gassert name
-        (exec [cmdname; "--version"] |> output_as_string =$= (ksprintf string "%s\n" expect))
+        ~on_failure:[
+          eprintf (string "→ %s --version: ```\\n%s```\\n") [string cmdname; cv];
+        ]
+        (cv =$= (ksprintf string "%s\n" expect))
     in
     genspio name ~procedure
 
@@ -357,7 +362,8 @@ module Image = struct
                        ~coclobas:(`Branch "master") ())
         ~tests:[
           Test.test_dashdashversion "ketrew" "3.0.0+dev";
-          Test.test_dashdashversion "coclobas" "0.0.0";
+          (* Test.test_dashdashversion "coclobas" "0.0.2-dev"; *)
+          Test.succeeds "coclobas --version | grep 0.0.2-dev";
           Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.2-dev";
         ];
       make "secotrec-default" ~dockerfile:(secotrec ())
