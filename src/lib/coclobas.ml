@@ -30,6 +30,7 @@ let to_service t =
         "--cluster-kind"; "gke";
         "--gke-cluster-name"; Gke_cluster.name kube;
         "--gcloud-zone"; Gke_cluster.zone kube;
+        "--machine-type"; Gke_cluster.machine_type kube;
         "--max-nodes";
         Gke_cluster.max_nodes kube |> Int.to_string;
       ]
