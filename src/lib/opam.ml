@@ -33,7 +33,7 @@ module Pin = struct
           ~clean_up:[fail] [
           exec ["opam"; "upgrade"];
           exec (
-            ["opam"; "upgrade"; "--yes"]
+            ["opam"; "install"; "--yes"]
             @ (List.map t_list ~f:(fun t -> t.package))
           );
         ];
