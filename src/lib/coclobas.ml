@@ -46,7 +46,7 @@ let to_service t =
           (string_concat [
               getenv (string "PATH");
               string ":";
-              string "/home/opam/google-cloud-sdk/bin/";
+              string "/opt/google-cloud-sdk/bin/";
             ]);
         exec ["sh"; "-c"; "echo \"PATH: $PATH\""];
         exec ["gcloud"; "--version"];

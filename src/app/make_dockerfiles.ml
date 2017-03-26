@@ -128,8 +128,9 @@ module Dockerfiles = struct
     comment "Installing GCloud command-line tool with kubectl" @@@ [
       apt_get_install ["python"; "build-essential"];
       env ["CLOUDSDK_CORE_DISABLE_PROMPTS", "true"];
+      env ["CLOUDSDK_INSTALL_DIR", "/opt"];
       bash_c ~sudo:false "curl https://sdk.cloud.google.com | bash";
-      env ["PATH", "${HOME}/google-cloud-sdk/bin/:${PATH}"];
+      env ["PATH", "${CLOUDSDK_INSTALL_DIR}/google-cloud-sdk/bin/:${PATH}"];
       run "gcloud components install kubectl";
     ]
 
