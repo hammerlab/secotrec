@@ -6,7 +6,7 @@ let configuration =
   Configuration_dot_env.[
     section "Basic GCloud setup" [
       env "prefix" ~required:true ~example:"secosetup42"
-        ~help:"A prefix string used to create names (machines, storage, etc.).";
+        ~help:"A prefix string is used to create names (machines, storage, etc.).";
       env "gcloud_zone" ~required:true ~example:"us-east1-x"
         ~help:"The Google Cloud zone to operate in.";
     ];
