@@ -243,7 +243,7 @@ module Dockerfiles = struct
     let open Dockerfile in
     secotrec () @@@ [
       apt_get_install ["vim"; "emacs"; "tmux"; "git-hub";
-                       "samtools"; "vcftools"];
+                       "samtools"; "vcftools"; "bwa"];
       opam_pins
         [
           github_pin "epidisco" "master";
@@ -397,8 +397,9 @@ module Image = struct
                       [docs](https://github.com/hammerlab/secotrec#secotrec-make-dockerfiles))."
         ~dockerfile:(ubuntu_docker ());
       make "epidisco-dev"
-        ~description:"Development/bioinformatics environment with Epidisco \
-                      and various tools (text editors, git-hub)."
+        ~description:"Developer-friendly environment for Biokepi/Secotrec \
+                      projects with various tools (text editors, git-hub, \
+                      Epidisco)."
         ~dockerfile:(epidisco_dev ());
     ]
 
