@@ -122,6 +122,8 @@ let run_command ?(use_script = false) t cmd =
               tmp; sprintf "%s:%s" t.name tmp];
       ];
       exec ["gcloud"; "compute"; "ssh"; t.name;
+            "--zone"; t.zone; "--command"; sprintf "sudo chmod 777 %s" tmp ];
+      exec ["gcloud"; "compute"; "ssh"; t.name;
             "--zone"; t.zone; "--command"; sprintf "sh %s" tmp ];
     ]
   | false ->
