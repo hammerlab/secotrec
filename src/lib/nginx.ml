@@ -69,7 +69,7 @@ module Proxy = struct
     in
     Docker_compose.Configuration.service t.name
       ~image:t.image
-      ~command:["sh"; "-c"; Genspio.Language.to_one_liner shell_cmd]
+      ~start_up_script:(Genspio.Language.to_many_lines shell_cmd)
 
 
 end
