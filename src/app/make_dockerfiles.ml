@@ -125,6 +125,12 @@ module Dockerfiles = struct
 
   let install_gcloud =
     let open Dockerfile in
+    let profile = "/etc/profile.d/gcloud_installation.sh" in
+    let profile_content = [
+      "# GCloud installation:";
+      "export CLOUDSDK_INSTALL_DIR=/opt";
+      "export PATH=${CLOUDSDK_INSTALL_DIR}/google-cloud-sdk/bin/:${PATH}";
+    ] in
     comment "Installing GCloud command-line tool with kubectl" @@@ [
       apt_get_install ["python"; "build-essential"];
       env ["CLOUDSDK_CORE_DISABLE_PROMPTS", "true"];
@@ -133,6 +139,14 @@ module Dockerfiles = struct
       env ["PATH", "${CLOUDSDK_INSTALL_DIR}/google-cloud-sdk/bin/:${PATH}"];
       run "gcloud components install kubectl";
     ]
+      @ List.map profile_content ~f:(fun line ->
+          bash_c ~sudo:true "echo %s >> %s" (Filename.quote line) profile;
+        )
+      @ [
+        bash_c ~sudo:true "chmod 666 %s" profile;
+        bash_c ~sudo:false "echo Created file %s" profile;
+        bash_c ~sudo:false "cat %s " profile;
+      ]
 
 
   let biokepi_run
@@ -330,7 +344,7 @@ module Image = struct
         ~description:"OCaml/Opam environment with the `master` version of \
                       [Ketrew](https://github.com/hammerlab/ketrew) installed."
         ~tests:[
-          Test.test_dashdashversion "ketrew" "3.0.0+dev";
+          Test.test_dashdashversion "ketrew" "3.1.0+dev";
         ];
       make "biokepi-run"
         ~description:"Ubuntu image with the “system” dependencies that \
@@ -360,11 +374,26 @@ module Image = struct
                        ~with_biokepi_user:true ~with_secotrec_gke:true
                        ~ketrew:(`Branch "master")
                        ~coclobas:(`Version "0.0.1") ())
-        ~tests:[
-          Test.test_dashdashversion "ketrew" "3.0.0+dev";
-          Test.test_dashdashversion "coclobas" "0.0.0";
-          Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.1";
-        ];
+        ~tests:begin
+          let cmds_opam_and_biokepi = [
+            "echo $PATH";
+            "ls -la /etc/profile.d/";
+            "cat /etc/profile.d/*";
+            "gcloud --version | grep 'Google Cloud'";
+            "gsutil --version | grep 'gsutil version'";
+            "kubectl version --client | grep 'Client'";
+          ] in
+          [
+            Test.test_dashdashversion "ketrew" "3.1.0+dev";
+            Test.test_dashdashversion "coclobas" "0.0.0";
+            Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.1";
+          ]
+          @ List.map cmds_opam_and_biokepi ~f:Test.succeeds
+          @ List.map cmds_opam_and_biokepi ~f:(fun s ->
+              (* It seems we need the `-l` in order to see `/etc/profile.d/` *)
+              ksprintf Test.succeeds
+                "sudo su biokepi sh -lc %s" (Filename.quote s))
+        end;
       make "coclobas-gke-biokepi-dev"
         ~description:"Image similar to `coclobas-gke-biokepi-default` but \
                       with Coclobas pinned to its `master` branch."
@@ -373,7 +402,7 @@ module Image = struct
                        ~ketrew:(`Branch "master")
                        ~coclobas:(`Branch "master") ())
         ~tests:[
-          Test.test_dashdashversion "ketrew" "3.0.0+dev";
+          Test.test_dashdashversion "ketrew" "3.1.0+dev";
           (* coclobas --version gives: "0.0.2-dev+<commit-hash-prefix>": *)
           Test.succeeds "coclobas --version | grep 0.0.2-dev";
           Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.2-dev";
@@ -383,7 +412,7 @@ module Image = struct
                       [Secotrec](https://github.com/hammerlab/secotrec) \
                       (and some tools it may use) installed."
         ~tests:[
-          Test.test_dashdashversion "ketrew" "3.0.0+dev";
+          Test.test_dashdashversion "ketrew" "3.1.0+dev";
           Test.test_dashdashversion "coclobas" "0.0.0";
           Test.test_dashdashversion "secotrec-gke" "0.0.0";
           Test.test_dashdashversion "secotrec-local" "0.0.0";
