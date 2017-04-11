@@ -58,7 +58,7 @@ let to_service t =
         exec ["sudo"; "usermod"; "-aG"; "docker"; "opam"];
         exec ["sudo"; "chmod"; "666"; "/var/run/docker.sock"];
       ] in
-  let shell_cmd =
+  let start_up_script =
     Genspio.EDSL.(
       seq [
         Opam.Pin.list_to_command t.opam_pin;
@@ -83,7 +83,7 @@ let to_service t =
           ]
       ]
     )
-    |> Genspio.Language.to_one_liner
+    |> Genspio.Language.to_many_lines
   in
   let volumes =
     let open Genspio_edsl in
@@ -100,5 +100,5 @@ let to_service t =
     ~image:t.image
     ~ports:[sprintf "%d:%d" t.port t.port]
     ~volumes
-    ~command:["/bin/bash"; "-c"; shell_cmd]
+    ~start_up_script
 

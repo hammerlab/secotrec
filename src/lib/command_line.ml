@@ -200,12 +200,12 @@ let deployment_commands (deployment : unit -> Deployment.t) =
       ~term: Term.(
           pure (fun deployment path ->
               Deployment.Run.Generate.docker_compose_configuration
-                ?path deployment)
+                ~path deployment)
           $ deployment_arg
-          $ Arg.(value
+          $ Arg.(required
                  @@ pos 0 (some string) None
                  @@ info [] ~docv:"PATH"
-                   ~doc:"Path to the configuration file.")
+                   ~doc:"Path to the configuration directory.")
         ) in
   let preparation_workflow =
     sub_command

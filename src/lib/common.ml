@@ -41,7 +41,7 @@ let check_size_of_script ?(name = "") str =
     (* eprintf "DBG: Command %S is not too big for `sh -c <>`: %d B\n%!" name len; *)
     str
 
-let genspio_to_one_liner ?(name = "") genspio =
+let genspio_to_one_liner ?(check_size = true) ?(name = "") genspio =
   let save = Filename.temp_file "run-genspio" "-cmd.sh" in
   let cmd_str =
     Genspio.Language.to_one_liner genspio in
@@ -54,7 +54,7 @@ let genspio_to_one_liner ?(name = "") genspio =
     eprintf "DBG: Command %S -> %s (and lines: %s)\n%!" name save save_lines;
   | false -> ()
   end;
-  cmd_str |> check_size_of_script ~name
+  if check_size then cmd_str |> check_size_of_script ~name else cmd_str
 
 let run_genspio ?(name = "run_genspio")
     ?(output_errors = true) ?returns genspio =

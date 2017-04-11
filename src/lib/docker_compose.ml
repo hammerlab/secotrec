@@ -7,16 +7,16 @@ module Configuration : sig
     ?image: string ->
     ?ports: string list ->
     ?environment: (string * string) list ->
-    ?command: string list ->
+    ?start_up_script: string ->
     ?privileged: bool ->
     ?volumes: string list ->
     ?raw_json:(string * Yojson.Safe.json) list ->
     string ->
     service
   val make : service list -> t
-  val render : t -> string
+  val render : t ->
+    [ `Configuration of string | `File_relative of string * string ] list
 end = struct
-  type t = Yojson.Safe.json
 
   let string s =
     (* Docker-compose has a very annoying variable subtitution thing going on
@@ -27,33 +27,70 @@ end = struct
       | other -> Buffer.add_char b other);
     `String (Buffer.contents b)
 
-  type service = string * t
+  type local_file = {
+    path: string;
+    content: string;
+  } [@@deriving make]
+  type service = {
+    configuration: Yojson.Safe.json;
+    script: local_file option;
+    name: string [@main];
+  } [@@deriving make]
   let service
-      ?image ?ports ?environment ?command ?privileged ?volumes
+      ?image ?ports ?environment ?start_up_script ?privileged ?volumes
       ?raw_json name : service =
     let optl o f = Option.value_map o ~default:[] ~f in
     let strlist l = `List (List.map l ~f:(fun s -> string s)) in
+    let script, all_volumes =
+      match start_up_script with
+      | Some s ->
+        let script_filename =
+          (* Hashing the content makes docker-compose notice when it changed
+             and hence it recreates the service. *)
+          sprintf "secotrec-service-%s-%s.sh" name Digest.(string s |> to_hex)
+        in
+        let script_local_path = "." // script_filename in
+        let script_mount_path = "/" // script_filename in
+        let script = make_local_file ~path:script_local_path ~content:s in
+        Some script,
+        Some (sprintf "%s:%s" script_local_path script_mount_path ::
+              Option.value ~default:[] volumes)
+      | None -> None, volumes
+    in
     let srv =
       optl image (fun s -> ["image", string s])
       @ optl ports (fun l -> ["ports", strlist l])
-      @ optl command (fun l -> ["command", strlist l])
+      @ Option.value_map ~default:[] script
+        ~f:(fun s -> ["command", strlist ["sh"; "/" // s.path]])
       @ optl environment (fun l ->
           ["environment",
            strlist (List.map l ~f:(fun (n, v) -> sprintf "%s=%s" n v))])
       @ optl raw_json (fun l -> l)
-      @ optl volumes (fun l -> ["volumes", strlist l])
+      @ optl all_volumes (fun l -> ["volumes", strlist l])
       @ optl privileged (fun b -> ["privileged", `Bool b])
       @ []
     in
-    (name, `Assoc srv)
+    make_service name ~configuration:(`Assoc srv)
+      ?script
 
-  let make services : t =
-    `Assoc [
-      "version", `String "2";
-      "services", `Assoc services;
-    ]
+  type t = {
+    services: service list [@main];
+  } [@@deriving make]
 
-  let render t = Yojson.Safe.pretty_to_string ~std:true t
+  let render t =
+    let json =
+      `Assoc [
+        "version", `String "2";
+        "services", `Assoc (List.map t.services ~f:(fun s ->
+            s.name, s.configuration));
+      ]
+    in
+    `Configuration (Yojson.Safe.pretty_to_string ~std:true json)
+    ::
+    List.filter_map t.services (fun s ->
+        Option.map s.script (fun s ->
+            `File_relative (s.path, s.content)))
+
 end
 
 
@@ -85,8 +122,14 @@ let make_command ?(with_software = true)
     (if with_software then ensure_software else nop);
     exec ["rm"; "-fr"; tmp_dir];
     exec ["mkdir"; "-p"; tmp_dir];
-    string (Configuration.render compose_config)
-    >> exec ["cat"] |> write_stdout ~path:(string docker_compose);
+    seq begin List.map (Configuration.render compose_config) ~f:(function
+      | `Configuration cc ->
+        string cc >> exec ["cat"] |> write_stdout ~path:(string docker_compose);
+      | `File_relative (relpath, content) ->
+        let path = tmp_dir // relpath in
+        string content >> exec ["cat"] |> write_stdout ~path:(string path);
+      )
+    end;
     exec ["cd"; tmp_dir]; (* maybe useless since we use `-f` below: *)
     exec (
       (if use_sudo then ["sudo"] else [])

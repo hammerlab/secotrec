@@ -42,7 +42,7 @@ let to_service t =
    Docker_compose.Configuration.service t.name
     ~image:t.image
     ~ports:[sprintf "443:%d" t.frontend_port]
-    ~command:["sh"; "-c"; genspio_to_one_liner ~name:"tlstun-compose" shell_cmd]
+    ~start_up_script:(Genspio.Language.to_many_lines shell_cmd)
     ~volumes:(
       match t.certificate with
       | `Fake -> []

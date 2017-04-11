@@ -82,8 +82,7 @@ let to_service t =
   Docker_compose.Configuration.service t.name
     ~image:t.image
     ~ports:[sprintf "%d:8080" t.port]
-    ~command:["dash"; "-c";
-              genspio_to_one_liner ~name:"kserver-compose" shell_cmd]
+    ~start_up_script:(Genspio.Language.to_many_lines shell_cmd)
     ~volumes:(List.map t.local_volumes ~f:(fun (a, b) -> sprintf "%s:%s" a b))
     ~environment:[
       (* "DB_URI", Postgres.to_uri t.db |> Uri.to_string; *)
