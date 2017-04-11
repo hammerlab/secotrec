@@ -92,7 +92,7 @@ module Fresh = struct
       ensure
         ~name:(sprintf "NFS-%s-is-up" t.name)
         (Gcloud_instance.instance_is_up
-           ~gcloud:"/home/opam/google-cloud-sdk/bin/gcloud"
+           ~gcloud:"/opt/google-cloud-sdk/bin/gcloud"
            t.instance)
         [
           seq_succeeds_or ~name:(sprintf "Creating-NFS-%s" t.name)
@@ -121,7 +121,7 @@ module Fresh = struct
         ~name:(sprintf "Waiting-for-NFS-%s-to-be-up" t.name)
         ~clean_up:[fail] [
         loop_until_ok
-          (exec ["/home/opam/google-cloud-sdk/bin/gcloud"; "compute"; "ssh"; vm_name t;
+          (exec ["/opt/google-cloud-sdk/bin/gcloud"; "compute"; "ssh"; vm_name t;
                  "--zone"; t.instance.Gcloud_instance.zone;
                  "--command"; sprintf "ls %s/" (storage_path t)]
            |> succeeds_silently)
@@ -129,13 +129,13 @@ module Fresh = struct
           ~sleep:5;
       ];
       ensure ~name:(sprintf "NFS-%s-witness" t.name)
-        (exec ["/home/opam/google-cloud-sdk/bin/gcloud"; "compute"; "ssh"; vm_name t;
+        (exec ["/opt/google-cloud-sdk/bin/gcloud"; "compute"; "ssh"; vm_name t;
                "--zone"; t.instance.Gcloud_instance.zone;
                "--command"; sprintf "ls %s" (witness_path t)]
          |> succeeds_silently) [
         seq_succeeds_or ~name:(sprintf "Creating-NFS-%s-witness" t.name)
           ~clean_up:[fail] [
-          exec ["/home/opam/google-cloud-sdk/bin/gcloud"; "compute"; "ssh"; vm_name t;
+          exec ["/opt/google-cloud-sdk/bin/gcloud"; "compute"; "ssh"; vm_name t;
                 "--zone"; t.instance.Gcloud_instance.zone;
                 "--command"; sprintf "echo hello > %s" (witness_path t)];
         ]
