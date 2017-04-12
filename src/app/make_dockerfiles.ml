@@ -564,13 +564,13 @@ module Test_build = struct
     let build_one image =
       let branch = Image.branch image in
       let dockerfile = Image.dockerfile image in
+      let force_rebuild = List.mem ~set:rebuild_tags (Image.tag image) in
       let witness_file =
         sprintf "docker-build-%s-%s%s"
           branch
           (Dockerfile.string_of_t dockerfile |> Digest.string |> Digest.to_hex)
-          (if List.mem ~set:rebuild_tags (Image.tag image)
-           then
-             sprintf "-rebuild-%s" ODate.Unix.(now () |> Printer.to_iso)
+          (if force_rebuild
+           then sprintf "-rebuild-%s" ODate.Unix.(now () |> Printer.to_iso)
            else "")
       in
       workflow_node (tmp_dir // witness_file |> single_file)
@@ -584,7 +584,9 @@ module Test_build = struct
                 shf "cd %s" dirname;
                 shf "echo %s > Dockerfile"
                   (Dockerfile.string_of_t dockerfile |> Filename.quote);
-                shf "docker build -t hammerlab/keredofi-test:%s ." branch;
+                shf "docker build %s -t hammerlab/keredofi-test:%s ."
+                  (if force_rebuild then "--no-cache" else "")
+                  branch;
                 shf "printf \"Done: $(date -R)\\n\" > %s/%s"
                   Coclobas_ketrew_backend.Plugin.extra_mount_container_side
                   witness_file;
