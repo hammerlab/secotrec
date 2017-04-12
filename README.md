@@ -83,7 +83,7 @@ utilities for proper access to GCloud services:
     gcloud auth login
 
     # Set your GKE project
-    gcloud set project YOUR_GKE_PROJECT
+    gcloud config set project YOUR_GKE_PROJECT
 
 Usage
 -----
