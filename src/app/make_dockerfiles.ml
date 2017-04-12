@@ -623,34 +623,67 @@ let env_exn s =
 let env_opt s =
   try Some (Sys.getenv s) with _ -> None
 
+module Repository = struct
+  type t = {
+    path : string;
+  } [@@deriving cmdliner]
+  let term () =
+    let open Cmdliner.Term in
+    pure (fun repo ->
+        List.iter Image.all ~f:(fun i ->
+            printf "====== Making %s ======\n%!" (Image.show i);
+            Github_repo.write repo.path i); 
+        Github_repo.write_readme repo.path Image.all;
+        cmdf
+          "cd %s && \
+           git status -s && \
+           git --no-pager log --graph --decorate --color --oneline --all -n 20"
+          repo.path;
+        ()
+      )
+    $ cmdliner_term ()
+end
+
+module Test_workflow = struct
+  type t = {
+    tags : string list;
+  } [@@deriving cmdliner]
+  let term () =
+    let open Cmdliner.Term in
+    pure (fun { tags } ->
+        let coclobas_base_url = env_exn "COCLOBAS_BASE_URL" in
+        let coclobas_tmp_dir = env_exn "COCLOBAS_TMP_DIR" in
+        let images =
+          match tags with
+          | [] -> Image.all
+          | _::_ ->
+            List.filter Image.all (fun i -> List.mem ~set:tags (Image.tag i))
+        in
+        Ketrew.Client.submit_workflow
+          ~add_tags:["secotrec"; "make-dockerfiles"]
+          (Test_build.build_all_workflow
+             ~coclobas_tmp_dir ~coclobas_base_url images)
+      )
+    $ cmdliner_term ()
+end
+
 let () =
-  let what = env_opt "do" in
-  begin match what with
-  | Some "write" ->
-    let dir = env_exn "dir" in
-    List.iter Image.all ~f:(fun i ->
-        printf "====== Making %s ======\n%!" (Image.show i);
-        Github_repo.write dir i); 
-    Github_repo.write_readme dir Image.all;
-    cmdf
-      "cd %s && \
-       git status -s && \
-       git --no-pager log --graph --decorate --color --oneline --all -n 20"
-      dir;
-    ()
-  | Some "test" ->
-    let coclobas_base_url = env_exn "COCLOBAS_BASE_URL" in
-    let coclobas_tmp_dir = env_exn "COCLOBAS_TMP_DIR" in
-    Ketrew.Client.submit_workflow
-      ~add_tags:["secotrec"; "make-dockerfiles"]
-      (Test_build.build_all_workflow
-         ~coclobas_tmp_dir ~coclobas_base_url Image.all)
-  | None | Some "view" ->
-    List.iter Image.all ~f:(fun im ->
-        printf "Branch `%s`:\n\n```\n%s\n```\n\n" (Image.branch im)
-          (Dockerfile.string_of_t (Image.dockerfile im)));
-  | Some other ->
-    ksprintf failwith "Don't know what %S ($what) means" other
-  end;
-  printf "Done.\n%!";
-  ()
+  let open Cmdliner.Term in
+  let subcmd name ?doc term = term, info name ?doc in
+  eval_choice (ret (pure (`Help (`Plain, None))), info "make-dockerfiles") [
+    subcmd "write-repository" (Repository.term ());
+    subcmd "test-workflow" (Test_workflow.term ());
+    subcmd "view" begin
+      pure (fun () ->
+          List.iter Image.all ~f:(fun im ->
+              printf "Branch `%s`:\n\n```\n%s\n```\n\n" (Image.branch im)
+                (Dockerfile.string_of_t (Image.dockerfile im)));
+        )
+      $ pure ()
+    end
+  ]
+  |> function
+  | `Error _ -> Pervasives.exit 1
+  | `Ok () -> Pervasives.exit 0
+  | `Version -> Pervasives.exit 0
+  | `Help -> Pervasives.exit 0
