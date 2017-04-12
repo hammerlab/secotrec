@@ -623,11 +623,6 @@ module Test_build = struct
 
 end
 
-let env_exn s =
-  try Sys.getenv s with _ -> ksprintf failwith "Missing env-var: %S" s
-let env_opt s =
-  try Some (Sys.getenv s) with _ -> None
-
 module Repository = struct
   type t = {
     path : string;
