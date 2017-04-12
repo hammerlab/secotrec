@@ -541,7 +541,8 @@ end
 
 module Test_build = struct
 
-  let build_all_workflow ~coclobas_tmp_dir ~coclobas_base_url l =
+  let build_all_workflow
+      ~coclobas_tmp_dir ~coclobas_base_url ?(rebuild_tags = []) l =
     let open Ketrew.EDSL in
     let tmp_dir =
       (* 
@@ -564,9 +565,13 @@ module Test_build = struct
       let branch = Image.branch image in
       let dockerfile = Image.dockerfile image in
       let witness_file =
-        sprintf "docker-build-%s-%s"
+        sprintf "docker-build-%s-%s%s"
           branch
           (Dockerfile.string_of_t dockerfile |> Digest.string |> Digest.to_hex)
+          (if List.mem ~set:rebuild_tags (Image.tag image)
+           then
+             sprintf "-rebuild-%s" ODate.Unix.(now () |> Printer.to_iso)
+           else "")
       in
       workflow_node (tmp_dir // witness_file |> single_file)
         ~name:(sprintf "Make %s" branch)
@@ -647,12 +652,13 @@ end
 module Test_workflow = struct
   type t = {
     tags : string list;
+    rebuild_tags: string list; (** Force the rebuild of the given images named by tag. *)
     coclobas_base_url: string [@env "COCLOBAS_BASE_URL"];
     coclobas_tmp_dir: string [@env "COCLOBAS_TMP_DIR"];
   } [@@deriving cmdliner]
   let term () =
     let open Cmdliner.Term in
-    pure begin fun { tags; coclobas_base_url; coclobas_tmp_dir } ->
+    pure begin fun { tags; rebuild_tags; coclobas_base_url; coclobas_tmp_dir } ->
       let images =
         match tags with
         | [] -> Image.all
@@ -661,7 +667,7 @@ module Test_workflow = struct
       in
       Ketrew.Client.submit_workflow
         ~add_tags:["secotrec"; "make-dockerfiles"]
-        (Test_build.build_all_workflow
+        (Test_build.build_all_workflow ~rebuild_tags
            ~coclobas_tmp_dir ~coclobas_base_url images)
     end
     $ cmdliner_term ()
