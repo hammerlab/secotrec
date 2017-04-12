@@ -675,11 +675,25 @@ end
 module Test_workflow = struct
   type t = {
     tags : string list [@default []];
-    rebuild_tags: string list [@default []]; (** Force the rebuild of the given images named by tag. *)
+    (** Only deal with the given list of images. *)
+
+    rebuild_tags: string list [@default []];
+    (** Force the rebuild of the given images named by tag. *)
+
     coclobas_base_url: string [@env "COCLOBAS_BASE_URL"];
+    (** Coclobas configuration: see the `environment-variables` subcommand of
+        your deployment. *)
+
     coclobas_tmp_dir: string [@env "COCLOBAS_TMP_DIR"];
+    (** Coclobas configuration: see the `environment-variables` subcommand of
+        your deployment. *)
+
     push_to_docker_with_credentials: (string * string) option;
+    (** Push the images to the Docker Hub; provide a username an password. *)
+
     repository: string [@default "hammerlab/keredofi-test"];
+    (** The repository part of the images created, if `--push` is used, this
+        is also the Docker-Hub repository. *)
   } [@@deriving cmdliner]
   let term () =
     let open Cmdliner.Term in
@@ -707,7 +721,10 @@ let () =
   let subcmd name ?doc term = term, info name ?doc in
   eval_choice (ret (pure (`Help (`Plain, None))), info "make-dockerfiles") [
     subcmd "write-repository" (Repository.term ());
-    subcmd "test-workflow" (Test_workflow.term ());
+    subcmd "test-workflow"
+      ~doc:"Submit a test/build/push workflow to a Ketrew server \
+            (Requires a Coclobas server running in “local-docker” mode)."
+      (Test_workflow.term ());
     subcmd "view" begin
       pure (fun () ->
           List.iter Image.all ~f:(fun im ->
