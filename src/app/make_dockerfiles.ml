@@ -544,7 +544,7 @@ module Test_build = struct
   type docker_hub_credentials = {
     username: string;
     password: string;
-  } [@@deriving cmdliner]
+  }
 
   let build_all_workflow
       ?push_to_docker_hub 
