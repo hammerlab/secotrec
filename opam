@@ -29,7 +29,7 @@ depends: [
   "coclobas" {>= "0.0.1" }
   "ketrew"
   "dockerfile"
-  "ppx_deriving_cmdliner"
+  "ppx_deriving_cmdliner" { >= "0.4.0" }
 ]
 available: [
   ocaml-version >= "4.03.0"
