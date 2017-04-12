@@ -647,23 +647,23 @@ end
 module Test_workflow = struct
   type t = {
     tags : string list;
+    coclobas_base_url: string [@env "COCLOBAS_BASE_URL"];
+    coclobas_tmp_dir: string [@env "COCLOBAS_TMP_DIR"];
   } [@@deriving cmdliner]
   let term () =
     let open Cmdliner.Term in
-    pure (fun { tags } ->
-        let coclobas_base_url = env_exn "COCLOBAS_BASE_URL" in
-        let coclobas_tmp_dir = env_exn "COCLOBAS_TMP_DIR" in
-        let images =
-          match tags with
-          | [] -> Image.all
-          | _::_ ->
-            List.filter Image.all (fun i -> List.mem ~set:tags (Image.tag i))
-        in
-        Ketrew.Client.submit_workflow
-          ~add_tags:["secotrec"; "make-dockerfiles"]
-          (Test_build.build_all_workflow
-             ~coclobas_tmp_dir ~coclobas_base_url images)
-      )
+    pure begin fun { tags; coclobas_base_url; coclobas_tmp_dir } ->
+      let images =
+        match tags with
+        | [] -> Image.all
+        | _::_ ->
+          List.filter Image.all (fun i -> List.mem ~set:tags (Image.tag i))
+      in
+      Ketrew.Client.submit_workflow
+        ~add_tags:["secotrec"; "make-dockerfiles"]
+        (Test_build.build_all_workflow
+           ~coclobas_tmp_dir ~coclobas_base_url images)
+    end
     $ cmdliner_term ()
 end
 
