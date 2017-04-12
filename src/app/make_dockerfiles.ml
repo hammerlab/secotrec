@@ -680,6 +680,10 @@ module Test_workflow = struct
     rebuild_tags: string list [@default []];
     (** Force the rebuild of the given images named by tag. *)
 
+    always_rebuild: bool [@default false];
+    (** Force the rebuild of all the images (supersedes
+        `--rebuild-tags` but obeys the `--tags` filter). *)
+
     coclobas_base_url: string [@env "COCLOBAS_BASE_URL"];
     (** Coclobas configuration: see the `environment-variables` subcommand of
         your deployment. *)
@@ -697,7 +701,8 @@ module Test_workflow = struct
   } [@@deriving cmdliner]
   let term () =
     let open Cmdliner.Term in
-    pure begin fun { tags; rebuild_tags; coclobas_base_url; coclobas_tmp_dir;
+    pure begin fun { tags; rebuild_tags; always_rebuild;
+                     coclobas_base_url; coclobas_tmp_dir;
                      push_to_docker_with_credentials; repository} ->
       let images =
         match tags with
@@ -708,6 +713,8 @@ module Test_workflow = struct
       let push_to_docker_hub =
         Option.map push_to_docker_with_credentials
           ~f:(fun (username, password) -> Test_build.{ username; password}) in
+      let rebuild_tags =
+        if always_rebuild then List.map images ~f:Image.tag else rebuild_tags in
       Ketrew.Client.submit_workflow
         ~add_tags:["secotrec"; "make-dockerfiles"]
         (Test_build.build_all_workflow ~rebuild_tags ?push_to_docker_hub
