@@ -541,7 +541,15 @@ end
 
 module Test_build = struct
 
-  let build_all_workflow ~coclobas_tmp_dir ~coclobas_base_url l =
+  type docker_hub_credentials = {
+    username: string;
+    password: string;
+  }
+
+  let build_all_workflow
+      ?push_to_docker_hub 
+      ~repository
+      ~coclobas_tmp_dir ~coclobas_base_url ?(rebuild_tags = []) l =
     let open Ketrew.EDSL in
     let tmp_dir =
       (* 
@@ -563,10 +571,14 @@ module Test_build = struct
     let build_one image =
       let branch = Image.branch image in
       let dockerfile = Image.dockerfile image in
+      let force_rebuild = List.mem ~set:rebuild_tags (Image.tag image) in
       let witness_file =
-        sprintf "docker-build-%s-%s"
+        sprintf "docker-build-%s-%s%s"
           branch
           (Dockerfile.string_of_t dockerfile |> Digest.string |> Digest.to_hex)
+          (if force_rebuild
+           then sprintf "-rebuild-%s" ODate.Unix.(now () |> Printer.to_iso)
+           else "")
       in
       workflow_node (tmp_dir // witness_file |> single_file)
         ~name:(sprintf "Make %s" branch)
@@ -579,7 +591,9 @@ module Test_build = struct
                 shf "cd %s" dirname;
                 shf "echo %s > Dockerfile"
                   (Dockerfile.string_of_t dockerfile |> Filename.quote);
-                shf "docker build -t hammerlab/keredofi-test:%s ." branch;
+                shf "docker build %s -t %s:%s ."
+                  (if force_rebuild then "--no-cache" else "")
+                  repository branch;
                 shf "printf \"Done: $(date -R)\\n\" > %s/%s"
                   Coclobas_ketrew_backend.Plugin.extra_mount_container_side
                   witness_file;
@@ -601,7 +615,7 @@ module Test_build = struct
                   exec ["echo"; sprintf "Running test %s" t.Test.name];
                   exec [
                     "docker";"run";
-                    sprintf "hammerlab/keredofi-test:%s" (Image.tag image);
+                    sprintf "%s:%s" repository (Image.tag image);
                     "bash"; "-c"; Test.to_shell t;
                   ]
                 ]
@@ -611,46 +625,124 @@ module Test_build = struct
           ~make:(run_program Program.(chain tests))
         |> depends_on
     in
+    let with_push_to_hub image =
+      match push_to_docker_hub with
+      | None -> with_tests image
+      | Some {username; password} ->
+        workflow_node without_product
+          ~name:(sprintf "Pushing %s to the Docker-hub" (Image.tag image))
+          ~edges:[with_tests image]
+          ~make:(run_program Program.(chain [
+                  exec ["echo"; sprintf "Pushing %s" (Image.tag image)];
+                  exec ["docker"; "login";
+                        "--username"; username;
+                        "--password"; password;];
+                  exec [
+                    "docker";"push";
+                    sprintf "%s:%s" repository (Image.tag image);
+                  ];
+            ]))
+        |> depends_on
+    in
     workflow_node without_product
       ~name:"Test-Build All Images"
-      ~edges:(List.map l ~f:(fun v -> with_tests v))
+      ~edges:(List.map l ~f:(fun v -> with_push_to_hub v))
 
 
 end
 
-let env_exn s =
-  try Sys.getenv s with _ -> ksprintf failwith "Missing env-var: %S" s
-let env_opt s =
-  try Some (Sys.getenv s) with _ -> None
+module Repository = struct
+  type t = {
+    path : string;
+  } [@@deriving cmdliner]
+  let term () =
+    let open Cmdliner.Term in
+    pure (fun repo ->
+        List.iter Image.all ~f:(fun i ->
+            printf "====== Making %s ======\n%!" (Image.show i);
+            Github_repo.write repo.path i); 
+        Github_repo.write_readme repo.path Image.all;
+        cmdf
+          "cd %s && \
+           git status -s && \
+           git --no-pager log --graph --decorate --color --oneline --all -n 20"
+          repo.path;
+        ()
+      )
+    $ cmdliner_term ()
+end
+
+module Test_workflow = struct
+  type t = {
+    tags : string list [@default []];
+    (** Only deal with the given list of images. *)
+
+    rebuild_tags: string list [@default []];
+    (** Force the rebuild of the given images named by tag. *)
+
+    always_rebuild: bool [@default false];
+    (** Force the rebuild of all the images (supersedes
+        `--rebuild-tags` but obeys the `--tags` filter). *)
+
+    coclobas_base_url: string [@env "COCLOBAS_BASE_URL"];
+    (** Coclobas configuration: see the `environment-variables` subcommand of
+        your deployment. *)
+
+    coclobas_tmp_dir: string [@env "COCLOBAS_TMP_DIR"];
+    (** Coclobas configuration: see the `environment-variables` subcommand of
+        your deployment. *)
+
+    push_to_docker_with_credentials: (string * string) option;
+    (** Push the images to the Docker Hub; provide a username an password. *)
+
+    repository: string [@default "hammerlab/keredofi-test"];
+    (** The repository part of the images created, if `--push` is used, this
+        is also the Docker-Hub repository. *)
+  } [@@deriving cmdliner]
+  let term () =
+    let open Cmdliner.Term in
+    pure begin fun { tags; rebuild_tags; always_rebuild;
+                     coclobas_base_url; coclobas_tmp_dir;
+                     push_to_docker_with_credentials; repository} ->
+      let images =
+        match tags with
+        | [] -> Image.all
+        | _::_ ->
+          List.filter Image.all (fun i -> List.mem ~set:tags (Image.tag i))
+      in
+      let push_to_docker_hub =
+        Option.map push_to_docker_with_credentials
+          ~f:(fun (username, password) -> Test_build.{ username; password}) in
+      let rebuild_tags =
+        if always_rebuild then List.map images ~f:Image.tag else rebuild_tags in
+      Ketrew.Client.submit_workflow
+        ~add_tags:["secotrec"; "make-dockerfiles"]
+        (Test_build.build_all_workflow ~rebuild_tags ?push_to_docker_hub
+           ~repository ~coclobas_tmp_dir ~coclobas_base_url images)
+    end
+    $ cmdliner_term ()
+end
 
 let () =
-  let what = env_opt "do" in
-  begin match what with
-  | Some "write" ->
-    let dir = env_exn "dir" in
-    List.iter Image.all ~f:(fun i ->
-        printf "====== Making %s ======\n%!" (Image.show i);
-        Github_repo.write dir i); 
-    Github_repo.write_readme dir Image.all;
-    cmdf
-      "cd %s && \
-       git status -s && \
-       git --no-pager log --graph --decorate --color --oneline --all -n 20"
-      dir;
-    ()
-  | Some "test" ->
-    let coclobas_base_url = env_exn "COCLOBAS_BASE_URL" in
-    let coclobas_tmp_dir = env_exn "COCLOBAS_TMP_DIR" in
-    Ketrew.Client.submit_workflow
-      ~add_tags:["secotrec"; "make-dockerfiles"]
-      (Test_build.build_all_workflow
-         ~coclobas_tmp_dir ~coclobas_base_url Image.all)
-  | None | Some "view" ->
-    List.iter Image.all ~f:(fun im ->
-        printf "Branch `%s`:\n\n```\n%s\n```\n\n" (Image.branch im)
-          (Dockerfile.string_of_t (Image.dockerfile im)));
-  | Some other ->
-    ksprintf failwith "Don't know what %S ($what) means" other
-  end;
-  printf "Done.\n%!";
-  ()
+  let open Cmdliner.Term in
+  let subcmd name ?doc term = term, info name ?doc in
+  eval_choice (ret (pure (`Help (`Plain, None))), info "make-dockerfiles") [
+    subcmd "write-repository" (Repository.term ());
+    subcmd "test-workflow"
+      ~doc:"Submit a test/build/push workflow to a Ketrew server \
+            (Requires a Coclobas server running in “local-docker” mode)."
+      (Test_workflow.term ());
+    subcmd "view" begin
+      pure (fun () ->
+          List.iter Image.all ~f:(fun im ->
+              printf "Branch `%s`:\n\n```\n%s\n```\n\n" (Image.branch im)
+                (Dockerfile.string_of_t (Image.dockerfile im)));
+        )
+      $ pure ()
+    end
+  ]
+  |> function
+  | `Error _ -> Pervasives.exit 1
+  | `Ok () -> Pervasives.exit 0
+  | `Version -> Pervasives.exit 0
+  | `Help -> Pervasives.exit 0
