@@ -512,7 +512,8 @@ module Node = struct
                     instance_id
                     (Option.value ~default:"None" inst.public_ip_address)
                     (Option.value ~default:"None" inst.public_dns_name)
-                    (List.assoc name t_to_str)
+                    (List.Assoc.get name t_to_str
+                     |> Option.value_exn ~msg:"Aws_node: List.Assoc. failed")
               end)
         in
         begin match interesting with
