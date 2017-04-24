@@ -87,11 +87,12 @@ module Dockerfiles = struct
       | `Branch b -> [] in
     sqlite @ ["libpq-dev"; "libev-dev"; "libgmp-dev"]
 
-  let ketrew_server how =
+  let ketrew_server ?(with_postgresql = true) how =
     Dockerfile.(
       opam_base () @@@ [
         apt_get_install (ketrew_dependencies how);
-        run "opam install -y tls conf-libev";
+        run "opam install -y tls conf-libev %s"
+          (if with_postgresql then "postgresql" else "");
         begin match how with
         | `K300 -> run "opam install ketrew.3.0.0"
         | `Branch b -> opam_pins [github_pin "ketrew" b]
@@ -330,6 +331,8 @@ module Image = struct
   let tests t = t.tests
 
   let all =
+    let ketrew_with_pg =
+      Test.succeeds "ketrew build | grep 'With PostgreSQL'" in
     let open Dockerfiles in
     [
       make "ketrew-server-300"
@@ -345,6 +348,7 @@ module Image = struct
                       [Ketrew](https://github.com/hammerlab/ketrew) installed."
         ~tests:[
           Test.test_dashdashversion "ketrew" "3.1.0+dev";
+          ketrew_with_pg;
         ];
       make "biokepi-run"
         ~description:"Ubuntu image with the “system” dependencies that \
@@ -385,6 +389,7 @@ module Image = struct
           ] in
           [
             Test.test_dashdashversion "ketrew" "3.1.0+dev";
+            ketrew_with_pg;
             Test.test_dashdashversion "coclobas" "0.0.0";
             Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.1";
           ]
@@ -403,6 +408,7 @@ module Image = struct
                        ~coclobas:(`Branch "master") ())
         ~tests:[
           Test.test_dashdashversion "ketrew" "3.1.0+dev";
+          ketrew_with_pg;
           (* coclobas --version gives: "0.0.2-dev+<commit-hash-prefix>": *)
           Test.succeeds "coclobas --version | grep 0.0.2-dev";
           Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.2-dev";
