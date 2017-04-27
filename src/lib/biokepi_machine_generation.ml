@@ -36,8 +36,8 @@ let reference_genomes_path =
   try env_exn "REFERENCE_GENOME_PATH"
   with _ -> work_dir // "reference-genome"
 let allow_daemonize =
-  try (env_exn "ALLOW_DAEMONIZE" = "false") |> not
-  with _ -> true
+  try (env_exn "ALLOW_DAEMONIZE" = "true")
+  with _ -> false
 let image =
   try env_exn "DOCKER_IMAGE"
   with _ -> "hammerlab/keredofi:biokepi-run-gcloud"
