@@ -155,7 +155,7 @@ module Dockerfiles = struct
       () =
     let open Dockerfile in
     let biokepi_dependencies = [
-      "cmake"; "r-base"; "tcsh"; "libx11-dev";
+      "cmake"; "r-base"; "tcsh"; "libx11-dev"; "libbz2-dev";
       "libfreetype6-dev"; "pkg-config"; "wget";
       "gawk"; "graphviz"; "xvfb"; "git";
     ] in
