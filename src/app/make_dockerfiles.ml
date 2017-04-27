@@ -84,7 +84,8 @@ module Dockerfiles = struct
     let sqlite =
       match how with
       | `K300 -> ["libsqlite3-dev"]
-      | `Branch b -> [] in
+      | `K310
+      | `Branch _ -> [] in
     sqlite @ ["libpq-dev"; "libev-dev"; "libgmp-dev"]
 
   let ketrew_server ?(with_postgresql = true) how =
@@ -95,6 +96,7 @@ module Dockerfiles = struct
           (if with_postgresql then "postgresql" else "");
         begin match how with
         | `K300 -> run "opam install ketrew.3.0.0"
+        | `K310 -> run "opam install ketrew.3.1.0"
         | `Branch b -> opam_pins [github_pin "ketrew" b]
         (* run *)
         (*   "opam pin --yes add ketrew https://github.com/hammerlab/ketrew.git#%s" b; *)
@@ -343,6 +345,14 @@ module Image = struct
         ~tests:[
           Test.test_dashdashversion "ketrew" "3.0.0";
         ];
+      make "ketrew-server-310"
+        ~dockerfile:(ketrew_server `K310)
+        ~description:"OCaml/Opam environment with \
+                      [Ketrew](https://github.com/hammerlab/ketrew) 3.1.0 \
+                      installed."
+        ~tests:[
+          Test.test_dashdashversion "ketrew" "3.1.0";
+        ];
       make "ketrew-server" ~dockerfile:(ketrew_server (`Branch "master"))
         ~description:"OCaml/Opam environment with the `master` version of \
                       [Ketrew](https://github.com/hammerlab/ketrew) installed."
@@ -365,6 +375,7 @@ module Image = struct
           Test.succeeds "gsutil version";
           Test.succeeds "kubectl version --client";
           Test.succeeds "whoami | grep biokepi";
+          Test.succeeds "ls /usr/include/bzlib.h"; (* Needed for bcftools *)
         ];
       make "coclobas-gke-dev"
         ~dockerfile:(coclobas ~with_gcloud:true ~ketrew:(`Branch "master")
