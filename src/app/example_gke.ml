@@ -84,9 +84,8 @@ let configuration =
             "reference-genome";
           env "ALLOW_DAEMONIZE"
             ~help:"Whether to use the `daemonize` backend for some jobs (might be \n\
-                   necessary in some cases, e.g. when one needs to use `gsutil`, \n\
-                   that's why the default is `true`)"
-            ~example:"false";
+                   necessary in some cases, although the default is `false`)"
+            ~example:"true";
           env "DOCKER_IMAGE"
             ~example:"organization/some-repo:some-tag"
             ~help:"The docker image used for the Biokepi jobs \
