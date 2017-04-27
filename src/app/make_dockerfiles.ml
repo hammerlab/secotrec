@@ -365,6 +365,7 @@ module Image = struct
           Test.succeeds "gsutil version";
           Test.succeeds "kubectl version --client";
           Test.succeeds "whoami | grep biokepi";
+          Test.succeeds "ls /usr/include/bzlib.h"; (* Needed for bcftools *)
         ];
       make "coclobas-gke-dev"
         ~dockerfile:(coclobas ~with_gcloud:true ~ketrew:(`Branch "master")
