@@ -5,7 +5,7 @@ Secotrec: Deploy Coclobas/Ketrew with class.
 `secotrec` is a library, it provides a bunch of hacks to create more or less
 generic deployments.
 
-It comes with 2 preconfigured “examples:”
+It comes with 2 preconfigured “examples”. You should pick one.
 
 1. `secotrec-gke`: 
     - sets up a new GCloud host with a bunch of services:
@@ -28,11 +28,11 @@ as `Dockerfile` generation tool.
 Install
 -------
 
-If you have an `opam` environment just install secotrec:
+You can install secotrec either from Opam or from a Docker image. 
 
-### With Opam
+### Option 1: With Opam
 
-For now we need a few packages pinned:
+If you have an `opam` environment, for now we need a few packages pinned:
 
     opam pin -n add ketrew https://github.com/hammerlab/ketrew.git
     opam pin -n add biokepi https://github.com/hammerlab/biokepi.git
@@ -47,7 +47,7 @@ Notes:
 - `biokepi` is only used by generated code (biokepi machine and its test).
 
 
-### Dockerized
+### Option 2: Dockerized
 
 #### Getting the Docker image
 
@@ -60,6 +60,8 @@ Notes:
     docker run -e KETREW_CONFIGURATION -it hammerlab/keredofi:secotrec-default
 
 #### Setup secrotec-local
+
+If you've chosen to use secotrec-local:
 
     # Enter the container for local use case
     docker run \
