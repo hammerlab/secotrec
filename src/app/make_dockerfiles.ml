@@ -162,13 +162,22 @@ module Dockerfiles = struct
   let biokepi_run
       ?(with_gcloud = false)
       ?(with_aws = false)
+      ?(with_wkhtmltopdf = true)
+      ?(with_oracle_java = true)
+      ?(remove_packages = [])
+      ?(with_entrypoint = Some ["/usr/bin/time"])
+      ?(with_biokepi_user = true)
       () =
     let open Dockerfile in
-    let biokepi_dependencies = [
-      "cmake"; "r-base"; "tcsh"; "libx11-dev"; "libbz2-dev";
-      "libfreetype6-dev"; "pkg-config"; "wget";
-      "gawk"; "graphviz"; "xvfb"; "git";
-    ] in
+    let biokepi_dependencies =
+      List.filter [
+        "cmake"; "r-base"; "tcsh"; "libx11-dev"; "libbz2-dev";
+        "libfreetype6-dev"; "pkg-config"; "wget";
+        "gawk"; "graphviz"; "xvfb"; "git";
+        "time"; (* for the ENTRYPOINT *)
+      ]
+        ~f:(fun pkg -> not (List.mem ~set:remove_packages pkg))
+    in
     let install_wkhtmltopdf =
       comment
         "Install wkhtmltopdf from source, this version \
@@ -200,12 +209,12 @@ module Dockerfiles = struct
       ]
     in
     intro
-    @@ install_wkhtmltopdf
-    @@ oracle_java_7
-    @@ biokepi_user#create_and_switch_to
+    @@ or_empty with_wkhtmltopdf install_wkhtmltopdf
+    @@ or_empty with_oracle_java oracle_java_7
+    @@ or_empty with_biokepi_user biokepi_user#create_and_switch_to
     @@ or_empty with_gcloud install_gcloud
     @@ or_empty with_aws install_aws
-    @@ entrypoint "/bin/sh"
+    @@ Option.value_map with_entrypoint ~f:(entrypoint_exec) ~default:Dockerfile.empty
 
   let coclobas
       ?(with_gcloud = false)
