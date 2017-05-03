@@ -303,6 +303,36 @@ module To_genspio = struct
       output_markdown_code "" begin
         exec ["mount"] ||> call [string "grep"; mount_point t];
       end;
+      saylp t "Using: Subnet: %s, Secgrp: %s" [
+        subnet_id ~aws_cli t;
+        security_group ~aws_cli t;
+      ];
+      saylp t "Mount-command:" [];
+      output_markdown_code "" begin
+        let mount_target_id =
+          get_or_create_mount_target t ~fs_id:file_system_id#get
+            ~subnet_id:(subnet_id ~aws_cli t)
+            ~secgrp_id:(security_group ~aws_cli t) in
+        let mt_ip_address =
+          aws_efs [
+            string "describe-mount-targets";
+            string "--mount-target-id"; mount_target_id#get;
+            string "--output"; string "text";
+            string "--query"; string "MountTargets[].IpAddress";
+          ]
+          ||> tr_remove_new_lines
+          |> output_as_string in
+        call [
+          string "printf"; string "%s\n";
+          string_concat [
+            string "sudo mount -t nfs4 \
+                    -o nfsvers=4.1,rsize=1048576,wsize=1048576,\
+                    hard,timeo=600,retrans=2 ";
+            mt_ip_address; string ":/ ";
+            mount_point t;
+          ];
+        ]
+      end;
       saylp t "Done." [];
     ]
 
