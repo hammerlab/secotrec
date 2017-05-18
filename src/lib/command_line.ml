@@ -180,7 +180,7 @@ let deployment_commands (deployment : unit -> Deployment.t) =
         ) in
   let useful_env =
     sub_command
-      ~info:Term.(info "environment-varirables"
+      ~info:Term.(info "environment-variables"
                     ~version ~sdocs:"COMMON OPTIONS" ~man:[]
                     ~doc:"Generate some useful environment variables.")
       ~term: Term.(
