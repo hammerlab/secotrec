@@ -37,12 +37,11 @@ let example () =
   let conf n = Configuration_dot_env.get_value_exn configuration n in
   let conf_opt n = Configuration_dot_env.get_exn configuration n in
   let biokepi_work =
-    object
-      method host =
-        try conf "biokepi_work"
-        with _ -> (Sys.getenv "HOME") // "biokepi-work-dir"
-      method mount = "/nfsaa"
-    end in
+    Option.map (conf_opt "biokepi_work") ~f:(fun hostpath ->
+        object
+          method host = hostpath
+          method mount = "/nfsaa"
+        end) in
   let coclo_tmp_dir =
     "/tmp/secotrec-local-shared-temp" in
   let node =
@@ -76,18 +75,20 @@ let example () =
       with _ -> [] in
     Ketrew_server.make ~port:8123 "kserver" ~auth_token ~db
       ~ketrew_debug_functions
-      ~local_volumes:[
-        coclo_tmp_dir, coclo_tmp_dir;
-        biokepi_work#host, biokepi_work#mount;
-      ]
+      ~local_volumes:(
+        [coclo_tmp_dir, coclo_tmp_dir]
+        @ Option.value_map biokepi_work ~default:[] ~f:(fun bw ->
+            [bw#host, bw#mount])
+      )
       ~opam_pin
   in
   let biokepi_machine =
-    Biokepi_machine_generation.make
-      ~default_work_dir:(biokepi_work#mount // "workdir")
-      ~coclobas:coclo
-      ~mounts:[ `Local (biokepi_work#host, biokepi_work#mount) ]
-      "The-Local-Machine" in
+    Option.map biokepi_work ~f:(fun bw ->
+        Biokepi_machine_generation.make
+          ~default_work_dir:(bw#mount // "workdir")
+          ~coclobas:coclo
+          ~mounts:[ `Local (bw#host, bw#mount) ]
+          "The-Local-Machine") in
   let tlstunnel =
     Option.map (conf_opt "gcloud_name") ~f:(fun _ ->
         let backend_address, backend_port = "kserver", 8080 in
@@ -98,18 +99,19 @@ let example () =
   in
   let preparation =
     let open Data_preparation in
-    make [
-      download
-        "https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37decoy_20160927.tgz"
-        ~in_directory:(biokepi_work#mount // "workdir/reference-genome");
-      download
-        "https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37_20161007.tgz"
-        ~in_directory:(biokepi_work#mount // "workdir/reference-genome");
-    ] in
+    Option.map biokepi_work ~f:(fun bw ->
+        make [
+          download
+            "https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37decoy_20160927.tgz"
+            ~in_directory:(bw#mount // "workdir/reference-genome");
+          download
+            "https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37_20161007.tgz"
+            ~in_directory:(bw#mount // "workdir/reference-genome");
+        ]) in
   Deployment.make "Light-local" ~node
     ?tlstunnel
-    ~preparation
-    ~biokepi_machine
+    ?preparation
+    ?biokepi_machine
     ~db
     ~ketrew
     ~coclobas:coclo
