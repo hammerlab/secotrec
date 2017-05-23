@@ -96,6 +96,13 @@ let configuration =
           annoying_url "NETMHCPAN_TARBALL_URL" "netMHCpan-2.8a.Linux.tar.gz" "NetMHCPan";
           annoying_url "PICKPOCKET_TARBALL_URL" "pickpocket-1.1a.Linux.tar.gz" "PickPocket";
           annoying_url "NETMHCCONS_TARBALL_URL" "netMHCcons-1.1a.Linux.tar.gz" "NetMHCCons";
+          env "NETMHC_TMPDIR"
+            ~help:"Where the NetMHC-family of tools should store their \n\
+                   temporary files on the pod. Note that these tools can \n\
+                   misbehave and arbitrarily drop some predictions if you \n\
+                   use a path to a folder on a mounted device."
+            ~default:"/tmp/"
+            ~example:"/path/to/tmp/";
         ]
       end;
   ]
