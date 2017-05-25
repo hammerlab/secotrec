@@ -24,3 +24,13 @@ let common_opam_pins =
         pin_opt "smondet/trakeva" @@ conf_opt "pin_trakeva";
       ]
   end
+
+let nfs_mounts_configuration () =
+  let open Configuration_dot_env in
+  env "nfs_mounts"
+    ~example:"my-nfs-server-01-vm,/nfs-pool,.tmp/witness,/nfs01:\n\
+              nfs-42-vm,/nfs-pool,local/path/some/file,/nfs42"
+    ~help:"List of additional NFS servers to mount on the Ketrew server \n\
+           and on Coclobas' jobs.\n\
+           It is a colon-separated list of NFS mounts, and each mount is a coma-separated tuple:\n\
+           <server-hostname>,<server-side-storage-path>,<witness-file>,<mount-point>"

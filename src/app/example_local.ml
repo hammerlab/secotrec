@@ -32,6 +32,7 @@ let configuration =
                    GCloud instance it is highly recommended to change this!";
           env "coclobas_max_jobs" ~required:false ~default:"2"
             ~help:"The limit on Coclobas' local-docker scheduler.";
+          Util.nfs_mounts_configuration ();
         ]
         @ Util.common_opam_pins#configuration
       end;
@@ -75,12 +76,16 @@ let example () =
       ~db ~opam_pin ~tmp_dir:coclo_tmp_dir in
   let auth_token = conf "ketrew_auth_token" in
   let ketrew =
+    let nfs_mounts =
+      Option.value_map ~default:[] (conf_opt "nfs_mounts")
+      ~f:Nfs.Mount.of_colon_separated_csv in
     let ketrew_debug_functions =
       try
         conf "ketrew_debug_functions"|> String.split ~on:(`Character ',')
       with _ -> [] in
     Ketrew_server.make ~port:8123 "kserver" ~auth_token ~db
       ~ketrew_debug_functions
+      ~nfs_mounts
       ~local_volumes:[
         coclo_tmp_dir, coclo_tmp_dir;
         biokepi_work#host, biokepi_work#mount;
