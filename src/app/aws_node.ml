@@ -572,7 +572,7 @@ module Node = struct
            ~image_id:"ami-7a3dd76c"
            ?key_name
            ~security_group_ids:[security_group_id]
-           ~instance_type:Aws_ec2.Types.InstanceType.T1_micro
+           ~instance_type:Aws_ec2.Types.InstanceType.M1_medium
            ())
       >>< begin function
       | `Ok {Aws_ec2.Types.Reservation. reservation_id; instances; _} ->
