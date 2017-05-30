@@ -1,5 +1,16 @@
 open Common
 
+module Aws_batch_cluster = struct
+  type t = {
+    queue: string;
+    bucket: string;
+  } [@@deriving make]
+end
+type cluster = [
+  | `GKE of Gke_cluster.t
+  | `Local of int
+  | `Aws_batch of Aws_batch_cluster.t
+]
 type t = {
   name:string [@default "coclo"];
   opam_pin: Opam.Pin.t list;
@@ -8,8 +19,7 @@ type t = {
   tmp_dir: string [@default "/tmp/coclosecolocal"];
   db:Uri.t;
   image: string [@default "hammerlab/keredofi:coclobas-gke-biokepi-default"];
-  cluster: 
-    [ `GKE of Gke_cluster.t | `Local of int ] [@main ];
+  cluster: cluster [@main ];
 } [@@deriving make]
 
 let cluster t = t.cluster
@@ -37,7 +47,14 @@ let to_service t =
     | `Local max_nodes -> [
         "--cluster-kind"; "local-docker";
         "--max-nodes"; max_nodes |> Int.to_string
-      ] in
+      ]
+    | `Aws_batch { Aws_batch_cluster. queue; bucket } -> [
+        "--cluster-kind"; "aws-batch";
+        "--max-nodes"; "40";
+        "--aws-queue"; queue;
+        "--aws-s3-bucket"; bucket;
+      ]
+  in
   let additional_setup =
     let open Genspio_edsl in
     match t.cluster with
@@ -57,7 +74,18 @@ let to_service t =
         (* See http://askubuntu.com/questions/477551/how-can-i-use-docker-without-sudo *)
         exec ["sudo"; "usermod"; "-aG"; "docker"; "opam"];
         exec ["sudo"; "chmod"; "666"; "/var/run/docker.sock"];
-      ] in
+      ]
+    | `Aws_batch { Aws_batch_cluster. queue; bucket } ->
+      let key_id = Sys.getenv "AWS_KEY_ID" in
+      let access_key = Sys.getenv "AWS_SECRET_KEY" in
+      let aws_conf (k, v) =
+        exec ["aws"; "configure"; "set"; k; v] in
+      List.map ~f:aws_conf [
+        "aws_access_key_id", key_id;
+        "aws_secret_access_key", access_key;
+        "default.region", "us-east-1";
+      ]
+  in
   let start_up_script =
     Genspio.EDSL.(
       seq [
@@ -88,14 +116,15 @@ let to_service t =
   let volumes =
     let open Genspio_edsl in
     match t.cluster with
-    | `GKE kube -> []
+    | `GKE _ | `Aws_batch _ -> []
     | `Local max_nodes -> [
         (* Cf.
            http://jpetazzo.github.io/2015/09/03/do-not-use-docker-in-docker-for-ci/#the-solution
         *)
         (let sock = "/var/run/docker.sock" in sprintf "%s:%s" sock sock);
         sprintf "%s:%s" t.tmp_dir t.tmp_dir;
-      ] in
+      ]
+  in
   Docker_compose.Configuration.service t.name
     ~image:t.image
     ~ports:[sprintf "%d:%d" t.port t.port]

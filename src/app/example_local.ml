@@ -33,6 +33,14 @@ let configuration =
           env "coclobas_max_jobs" ~required:false ~default:"2"
             ~help:"The limit on Coclobas' local-docker scheduler.";
           Util.nfs_mounts_configuration ();
+          env "aws_batch" ~required:false
+            ~help:"Use the experimental \
+                   AWS-Batch backend of Coclobas instead of “Local-Docker.”\n\
+                   You must provide the AWs-Batch queue name and an `s3://` \
+                   bucket URI separated by a comma.\n\
+                   This setup also requires to pass the AWS credentials \
+                   through environment variables: \
+                   `AWS_KEY_ID` and `AWS_SECRET_KEY`."
         ]
         @ Util.common_opam_pins#configuration
       end;
@@ -72,8 +80,17 @@ let example () =
       (Uri.of_string "postgresql://pg/?user=postgres&password=kpass") in
   let opam_pin = Util.common_opam_pins#opam_pins configuration in
   let coclo =
-    Coclobas.make (`Local (conf "coclobas_max_jobs" |> int_of_string))
-      ~db ~opam_pin ~tmp_dir:coclo_tmp_dir in
+    let cluster, image =
+      match conf_opt "aws_batch" with
+      | None -> `Local (conf "coclobas_max_jobs" |> int_of_string), None
+      | Some s ->
+        begin match String.split ~on:(`Character ',') s with
+        | [queue; bucket] ->
+          `Aws_batch (Coclobas.Aws_batch_cluster.make ~queue ~bucket),
+          Some "hammerlab/keredofi:coclobas-aws-biokepi-dev"
+        | _ -> failwith (sprintf "wrong format for `aws_batch`: %S" s)
+        end in
+    Coclobas.make cluster ~db ~opam_pin ~tmp_dir:coclo_tmp_dir ?image in
   let auth_token = conf "ketrew_auth_token" in
   let ketrew =
     let nfs_mounts =
