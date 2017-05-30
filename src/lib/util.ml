@@ -32,5 +32,6 @@ let nfs_mounts_configuration () =
               nfs-42-vm,/nfs-pool,local/path/some/file,/nfs42"
     ~help:"List of additional NFS servers to mount on the Ketrew server \n\
            and on Coclobas' jobs.\n\
-           It is a colon-separated list of NFS mounts, and each mount is a coma-separated tuple:\n\
+           It is a colon-separated list of NFS mounts, and each mount is a \
+           comma-separated tuple:\n\
            <server-hostname>,<server-side-storage-path>,<witness-file>,<mount-point>"
