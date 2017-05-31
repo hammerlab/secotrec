@@ -5,7 +5,8 @@ type t = {
   backend_address: string option;
   backend_port: int;
   frontend_address: string option;
-  frontend_port: int;
+  frontend_port: int [@default 8443];
+  exposed_port: int [@default 443];
   certificate: [ `Fake | `Mount of (string * string * string)] [@default `Fake];
   name: string [@main ];
 } [@@deriving make]
@@ -41,7 +42,7 @@ let to_service t =
   in
    Docker_compose.Configuration.service t.name
     ~image:t.image
-    ~ports:[sprintf "443:%d" t.frontend_port]
+    ~ports:[sprintf "%d:%d" t.exposed_port t.frontend_port]
     ~start_up_script:(Genspio.Language.to_many_lines shell_cmd)
     ~volumes:(
       match t.certificate with

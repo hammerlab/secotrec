@@ -26,14 +26,7 @@ let configuration =
         ~example:Deployment.Extra_nfs_server.sexp_syntax_example
         ~help:(sprintf "Describe additional NFS servers to setup.\n%s"
                  Deployment.Extra_nfs_server.sexp_syntax_help);
-      env "nfs_mounts"
-        ~example:"my-nfs-server-01-vm,/nfs-pool,.tmp/witness,/nfs01:\n\
-                  nfs-42-vm,/nfs-pool,local/path/some/file,/nfs42"
-        ~help:"List of additional NFS servers to mount on the Ketrew server \n\
-               and on Coclobas' Kubernernetes jobs.\n\
-               It is a colon-separated list of NFS mounts, and each mount is a coma-separated tuple:\n\
-               <server-hostname>,<server-side-storage-path>,<witness-file>,<mount-point>
-              ";
+      Util.nfs_mounts_configuration ();
     ];
     section "DNS / TLS" [
       env "dns_suffix" ~required:true ~example:"mygcloudzone.example.com"

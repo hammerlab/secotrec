@@ -1,5 +1,16 @@
 open Common
 
+module Aws_batch_cluster: sig
+  type t = {
+    queue: string;
+    bucket: string;
+  } [@@deriving make]
+end
+type cluster = [
+  | `GKE of Gke_cluster.t
+  | `Local of int
+  | `Aws_batch of Aws_batch_cluster.t
+]
 type t
 val make :
   ?name:string ->
@@ -9,10 +20,10 @@ val make :
   ?tmp_dir: string ->
   db:Postgres.t ->
   ?image: string ->
-  [ `GKE of Gke_cluster.t | `Local of int ] ->
+  cluster ->
   t
 
-val cluster : t -> [ `GKE of Gke_cluster.t | `Local of int ]
+val cluster : t -> cluster
 val name: t -> string
 val base_url: t -> string
 val url_for_local_client: t -> string

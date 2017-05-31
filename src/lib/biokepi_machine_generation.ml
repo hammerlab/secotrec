@@ -183,6 +183,8 @@ let to_ocaml ?(with_script_header = true) t =
     match Coclobas.cluster t.coclobas with
     | `GKE _ -> run_program_blob_for_gke
     | `Local _ -> run_program_blob_for_local_docker ~coclobas_service:t.coclobas
+    | `Aws_batch _ ->
+      failwith "AWS-Batch biokepi-machine generation: NOT IMPLEMENTED"
   in
   let pieces =
     only_if with_script_header [script_header]

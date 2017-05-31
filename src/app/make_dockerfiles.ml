@@ -151,16 +151,33 @@ module Dockerfiles = struct
         bash_c ~sudo:false "cat %s " profile;
       ]
 
+  let install_aws =
+    let open Dockerfile in
+    comment "Installing aws-cli command-line tool" @@@ [
+      apt_get_install ["python"; "python-pip"; "build-essential"];
+      run "sudo pip install --upgrade awscli";
+    ]
+
 
   let biokepi_run
       ?(with_gcloud = false)
+      ?(with_aws = false)
+      ?(with_wkhtmltopdf = true)
+      ?(with_oracle_java = true)
+      ?(remove_packages = [])
+      ?(with_entrypoint = Some ["/usr/bin/time"])
+      ?(with_biokepi_user = true)
       () =
     let open Dockerfile in
-    let biokepi_dependencies = [
-      "cmake"; "r-base"; "tcsh"; "libx11-dev"; "libbz2-dev";
-      "libfreetype6-dev"; "pkg-config"; "wget";
-      "gawk"; "graphviz"; "xvfb"; "git";
-    ] in
+    let biokepi_dependencies =
+      List.filter [
+        "cmake"; "r-base"; "tcsh"; "libx11-dev"; "libbz2-dev";
+        "libfreetype6-dev"; "pkg-config"; "wget";
+        "gawk"; "graphviz"; "xvfb"; "git";
+        "time"; (* for the ENTRYPOINT *)
+      ]
+        ~f:(fun pkg -> not (List.mem ~set:remove_packages pkg))
+    in
     let install_wkhtmltopdf =
       comment
         "Install wkhtmltopdf from source, this version \
@@ -192,14 +209,16 @@ module Dockerfiles = struct
       ]
     in
     intro
-    @@ install_wkhtmltopdf
-    @@ oracle_java_7
-    @@ biokepi_user#create_and_switch_to
+    @@ or_empty with_wkhtmltopdf install_wkhtmltopdf
+    @@ or_empty with_oracle_java oracle_java_7
+    @@ or_empty with_biokepi_user biokepi_user#create_and_switch_to
     @@ or_empty with_gcloud install_gcloud
-    @@ entrypoint "bash"
+    @@ or_empty with_aws install_aws
+    @@ Option.value_map with_entrypoint ~f:(entrypoint_exec) ~default:Dockerfile.empty
 
   let coclobas
       ?(with_gcloud = false)
+      ?(with_aws = false)
       ?(with_gcloudnfs = false)
       ?(with_biokepi_user = false)
       ?(with_secotrec_gke = false)
@@ -226,6 +245,7 @@ module Dockerfiles = struct
       (* biokepi user *)
       or_empty with_biokepi_user biokepi_user#create;
       or_empty with_gcloud install_gcloud;
+      or_empty with_aws install_aws;
       or_empty with_gcloudnfs install_gcloudnfs;
       or_empty with_secotrec_gke secotrec_gke_stuff;
       begin match coclobas with
@@ -335,6 +355,8 @@ module Image = struct
   let all =
     let ketrew_with_pg =
       Test.succeeds "ketrew build | grep 'With PostgreSQL'" in
+    let aws_cli_version =
+      Test.succeeds "aws --version 2>&1 | grep aws-cli/1.11" in
     let open Dockerfiles in
     [
       make "ketrew-server-300"
@@ -376,6 +398,15 @@ module Image = struct
           Test.succeeds "kubectl version --client";
           Test.succeeds "whoami | grep biokepi";
           Test.succeeds "ls /usr/include/bzlib.h"; (* Needed for bcftools *)
+        ];
+      make "biokepi-run-aws"
+        ~description:"Image similar to `biokepi-run` but with `aws` \
+                      installed."
+        ~dockerfile:(biokepi_run ~with_aws:true ())
+        ~tests:[
+          Test.succeeds "whoami | grep biokepi";
+          Test.succeeds "ls /usr/include/bzlib.h"; (* Needed for bcftools *)
+          aws_cli_version;
         ];
       make "coclobas-gke-dev"
         ~dockerfile:(coclobas ~with_gcloud:true ~ketrew:(`Branch "master")
@@ -423,6 +454,23 @@ module Image = struct
           (* coclobas --version gives: "0.0.2-dev+<commit-hash-prefix>": *)
           Test.succeeds "coclobas --version | grep 0.0.2-dev";
           Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.2-dev";
+        ];
+      make "coclobas-aws-biokepi-dev"
+        ~description:"Image similar to `coclobas-gke-biokepi-default` but \
+                      with Coclobas pinned to its `master` branch and `aws` \
+                      instead of `gcloud`."
+        ~dockerfile:(coclobas ~with_aws:true
+                       ~with_biokepi_user:true
+                       ~with_secotrec_gke:true
+                       ~ketrew:(`Branch "master")
+                       ~coclobas:(`Branch "master") ())
+        ~tests:[
+          Test.test_dashdashversion "ketrew" "3.1.0+dev";
+          ketrew_with_pg;
+          (* coclobas --version gives: "0.0.2-dev+<commit-hash-prefix>": *)
+          Test.succeeds "coclobas --version | grep 0.0.2-dev";
+          Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.2-dev";
+          aws_cli_version;
         ];
       make "secotrec-default" ~dockerfile:(secotrec ())
         ~description:"OCaml/Opam environment with the `master` version of \
