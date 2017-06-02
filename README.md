@@ -260,32 +260,39 @@ secotrec-local down
 
 ### Secotrec-Make-Dockerfiles
 
-`secotrec-make-dockerfiles` is designed to update
-the repository
-[`hammerlab/keredofi`](https://github.com/hammerlab/keredofi)
-(but can start from a mostly empty repo),
-and hence the automatically built
-[`hammerlab/keredofi`](https://hub.docker.com/r/hammerlab/keredofi/builds/)
-Docker-hub images.
+`secotrec-make-dockerfiles` is designed to update the Docker-Hub images
+at [`hammerlab/keredofi`](https://hub.docker.com/r/hammerlab/keredofi/builds/).
+
+The `README.md` and the corresponding branches of GitHub
+repository [`hammerlab/keredofi`](https://github.com/hammerlab/keredofi) are
+also updated for convenience by this tools (but we do not use Docker-Hub
+automated builds any more).
 
 Display all the Dockerfiles on stdout:
 
-    do=view secotrec-make-dockerfiles
+    secotrec-make-dockerfiles view
 
 Write the `Dockerfile`s in their respective branches and commit if something
 changed:
 
-    dir=/path/to/keredofi do=write secotrec-make-dockerfiles
+    secotrec-make-dockerfiles write --path=/path/to/keredofi
     
 when done, the tool displays the Git graph of the Keredofi repo; if you're
 happy, just go there and `git push --all`.
 
 
-Submit a Ketrew workflow that test-builds all the `Dockerfiles` (for now this
-expects a `secotrec-local`-like setup):
+Submit a Ketrew workflow that builds and runs some tests on all the
+`Dockerfiles` (for now this expects a `secotrec-local`-like setup):
 
     eval `secotrec-local env`
-    do=test secotrec-make-dockerfiles
+    secotrec-make-dockerfiles test
+
+See `secotrec-make-dockerfiles test --help` for more options, you can for
+instance push to the Docker-Hub:
+
+    secotrec-make-dockerfiles test \
+        --repo hammerlab/keredofi-test-2 --push agent-cooper,black-lodge
+
 
 ### Secotrec-aws-node
 
@@ -296,11 +303,34 @@ When in the environment `WITH_AWS_NODE` is `true`, and application
     
 For now the this uses the AWS API to setup a “ready-to-use” EC2 server.
 
-The build requires `master` versions of: `aws` and `aws-ec2`
-(cf.
+The build requires `master` versions of: `aws` and `aws-ec2`:
+
+```shell
+pin_all () {
+    local tmpdir=$HOME/tmp/
+    rm -fr $tmpdir/ocaml-aws
+    cd $tmpdir
+    git clone https://github.com/inhabitedtype/ocaml-aws.git
+    cd ocaml-aws
+    opam pin add -y -n aws .
+    for lib in $(find libraries/ -type d -name opam) ; do
+        echo "Do $lib"
+        opam pin add -y -n aws-$(basename $(dirname $lib)) ./$(dirname $lib)/
+    done;
+}
+installs () {
+    local all="aws aws-ec2"
+    opam remove -y $all
+    for lib in $all ; do
+        ocamlfind remove $lib
+    done
+    opam install -y $all
+}
+```
+
+(cf. also
 [comment](https://github.com/inhabitedtype/ocaml-aws/issues/21#issuecomment-283446276)
-on [`#21`](https://github.com/inhabitedtype/ocaml-aws/issues/21)
-to properly pin all AWS libraries to `master`).
+on [`#21`](https://github.com/inhabitedtype/ocaml-aws/issues/21)).
 
 Usage:
 
@@ -323,3 +353,4 @@ Everything should be idempotent (but some “Waiting for” functions may timeou
 for now).
 
 More to come…
+
