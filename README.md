@@ -296,8 +296,11 @@ When in the environment `WITH_AWS_NODE` is `true`, and application
     
 For now the this uses the AWS API to setup a “ready-to-use” EC2 server.
 
-The build requires `master` versions of: `aws`, `aws-ec2`, and
-`ppx_deriving_cmdliner`.
+The build requires `master` versions of: `aws` and `aws-ec2`
+(cf.
+[comment](https://github.com/inhabitedtype/ocaml-aws/issues/21#issuecomment-283446276)
+on [`#21`](https://github.com/inhabitedtype/ocaml-aws/issues/21)
+to properly pin all AWS libraries to `master`).
 
 Usage:
 
