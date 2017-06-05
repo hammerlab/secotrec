@@ -181,11 +181,13 @@ module Dockerfiles = struct
       List.filter base ~f:(fun pkg -> not (List.mem ~set:remove_packages pkg))
     in
     let install_wkhtmltopdf =
+      let url =
+        "http://downloads.wkhtmltopdf.org/0.12/0.12.3/\
+         wkhtmltox-0.12.3_linux-generic-amd64.tar.xz" in
       comment
         "Install wkhtmltopdf from source, this version \
          comes with patched QT necessary for PDF gen" @@@ [
-        run "cd /tmp ; \
-             wget http://download.gna.org/wkhtmltopdf/0.12/0.12.3/wkhtmltox-0.12.3_linux-generic-amd64.tar.xz";
+        run "cd /tmp ; wget %s" (Filename.quote url);
         run "cd /tmp && tar xvfJ wkhtmltox-0.12.3_linux-generic-amd64.tar.xz";
         run "cd /tmp/wkhtmltox/bin && sudo chown root:root wkhtmltopdf";
         run "sudo cp /tmp/wkhtmltox/bin/wkhtmltopdf /usr/local/bin/wkhtmltopdf";
