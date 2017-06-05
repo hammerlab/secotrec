@@ -196,8 +196,8 @@ module Dockerfiles = struct
              -O /etc/fonts/local.conf"
       ]
     in
-    let oracle_java_7 =
-      comment "The hard-one: Installing Oracle's Java 7" @@@ [
+    let oracle_java_8 =
+      comment "The hard-one: Installing Oracle's Java 8" @@@ [
         run "sudo add-apt-repository --yes ppa:webupd8team/java";
         run "sudo apt-get update";
         comment "On top of that we have to fight with interactive licensing questions";
@@ -205,7 +205,7 @@ module Dockerfiles = struct
         bash_c "echo debconf shared/accepted-oracle-license-v1-1 select true | debconf-set-selections";
         bash_c "echo debconf shared/accepted-oracle-license-v1-1 seen true |  debconf-set-selections";
         bash_c "DEBIAN_FRONTEND=noninteractive apt-get install --yes \
-                --allow-unauthenticated oracle-java7-installer";
+                --allow-unauthenticated oracle-java8-installer";
       ] in
     let intro =
       opam_base () @@@ [
@@ -214,7 +214,7 @@ module Dockerfiles = struct
     in
     intro
     @@ or_empty with_wkhtmltopdf install_wkhtmltopdf
-    @@ or_empty with_oracle_java oracle_java_7
+    @@ or_empty with_oracle_java oracle_java_8
     @@ or_empty with_biokepi_user biokepi_user#create_and_switch_to
     @@ or_empty with_gcloud install_gcloud
     @@ or_empty with_aws install_aws
