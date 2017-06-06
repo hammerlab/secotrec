@@ -51,7 +51,7 @@ module Dockerfiles = struct
 
   let opam_pins ?(more_installs = []) pins =
     let open Dockerfile in
-    comment "A few opam-pins:" @@@ 
+    comment "A few opam-pins:" @@@
     List.concat [
       List.map pins ~f:(fun (p, uri) ->
           run "opam pin --yes -n add '%s' '%s'" p uri);
@@ -170,20 +170,24 @@ module Dockerfiles = struct
       () =
     let open Dockerfile in
     let biokepi_dependencies =
-      List.filter [
-        "cmake"; "r-base"; "tcsh"; "libx11-dev"; "libbz2-dev";
-        "libfreetype6-dev"; "pkg-config"; "wget";
-        "gawk"; "graphviz"; "xvfb"; "git";
-        "time"; (* for the ENTRYPOINT *)
-      ]
-        ~f:(fun pkg -> not (List.mem ~set:remove_packages pkg))
+      let base =
+        ["cmake"; "r-base"; "tcsh"; "libx11-dev"; "libbz2-dev";
+         "libfreetype6-dev"; "pkg-config"; "wget";
+         "gawk"; "graphviz"; "xvfb"; "git";
+         "time"; (* for the ENTRYPOINT *)]
+        (* AWS containers need to mount EFS targets by themselves: *)
+        @ (if with_aws then ["nfs-common"] else [])
+      in
+      List.filter base ~f:(fun pkg -> not (List.mem ~set:remove_packages pkg))
     in
     let install_wkhtmltopdf =
+      let url =
+        "http://downloads.wkhtmltopdf.org/0.12/0.12.3/\
+         wkhtmltox-0.12.3_linux-generic-amd64.tar.xz" in
       comment
         "Install wkhtmltopdf from source, this version \
          comes with patched QT necessary for PDF gen" @@@ [
-        run "cd /tmp ; \
-             wget http://download.gna.org/wkhtmltopdf/0.12/0.12.3/wkhtmltox-0.12.3_linux-generic-amd64.tar.xz";
+        run "cd /tmp ; wget %s" (Filename.quote url);
         run "cd /tmp && tar xvfJ wkhtmltox-0.12.3_linux-generic-amd64.tar.xz";
         run "cd /tmp/wkhtmltox/bin && sudo chown root:root wkhtmltopdf";
         run "sudo cp /tmp/wkhtmltox/bin/wkhtmltopdf /usr/local/bin/wkhtmltopdf";
@@ -192,8 +196,8 @@ module Dockerfiles = struct
              -O /etc/fonts/local.conf"
       ]
     in
-    let oracle_java_7 =
-      comment "The hard-one: Installing Oracle's Java 7" @@@ [
+    let oracle_java_8 =
+      comment "The hard-one: Installing Oracle's Java 8" @@@ [
         run "sudo add-apt-repository --yes ppa:webupd8team/java";
         run "sudo apt-get update";
         comment "On top of that we have to fight with interactive licensing questions";
@@ -201,7 +205,7 @@ module Dockerfiles = struct
         bash_c "echo debconf shared/accepted-oracle-license-v1-1 select true | debconf-set-selections";
         bash_c "echo debconf shared/accepted-oracle-license-v1-1 seen true |  debconf-set-selections";
         bash_c "DEBIAN_FRONTEND=noninteractive apt-get install --yes \
-                --allow-unauthenticated oracle-java7-installer";
+                --allow-unauthenticated oracle-java8-installer";
       ] in
     let intro =
       opam_base () @@@ [
@@ -210,7 +214,7 @@ module Dockerfiles = struct
     in
     intro
     @@ or_empty with_wkhtmltopdf install_wkhtmltopdf
-    @@ or_empty with_oracle_java oracle_java_7
+    @@ or_empty with_oracle_java oracle_java_8
     @@ or_empty with_biokepi_user biokepi_user#create_and_switch_to
     @@ or_empty with_gcloud install_gcloud
     @@ or_empty with_aws install_aws
@@ -221,7 +225,8 @@ module Dockerfiles = struct
       ?(with_aws = false)
       ?(with_gcloudnfs = false)
       ?(with_biokepi_user = false)
-      ?(with_secotrec_gke = false)
+      ?(with_secotrec_stuff = false)
+      ?(with_entrypoint = Some ["opam"; "config"; "exec"; "--"])
       ~ketrew ~coclobas () =
     let open Dockerfile in
     let install_gcloudnfs =
@@ -233,13 +238,12 @@ module Dockerfiles = struct
                 -O/usr/bin/gcloudnfs";
         bash_c "chmod a+rx /usr/bin/gcloudnfs";
       ] in
-    let secotrec_gke_stuff =
+    let secotrec_deployed_stuff =
       let more_packages =
         ["zlib1g-dev"; "screen"; "nfs-common"; "graphviz"];
       in
-      comment "Getting more things usefull for Secotrec-GKE deployments" @@@ [
+      comment "Getting more things usefull for Secotrec-* deployments" @@@ [
         apt_get_install more_packages;
-        run "opam install --yes tlstunnel";
       ] in
     ketrew_server ketrew @@@ [
       (* biokepi user *)
@@ -247,11 +251,16 @@ module Dockerfiles = struct
       or_empty with_gcloud install_gcloud;
       or_empty with_aws install_aws;
       or_empty with_gcloudnfs install_gcloudnfs;
-      or_empty with_secotrec_gke secotrec_gke_stuff;
+      or_empty with_secotrec_stuff secotrec_deployed_stuff;
       begin match coclobas with
       | `Version v -> opam_pins ["coclobas", v]
       | `Branch b -> opam_pins [github_pin "coclobas" b]
       end;
+      Option.value_map
+        with_entrypoint ~f:(fun e ->
+            entrypoint_exec e
+            @@ cmd_exec ["bash"]
+          ) ~default:Dockerfile.empty
     ]
 
   let secotrec () =
@@ -266,6 +275,13 @@ module Dockerfiles = struct
           github_pin "biokepi" "master";
           github_pin "secotrec" "master";
         ];
+    ]
+
+  let tlstunnel () =
+    let open Dockerfile in
+    opam_base () @@@ [
+      apt_get_install ["libev-dev"; "libgmp-dev"];
+      run "opam install --yes tlstunnel";
     ]
 
   let ubuntu_docker () =
@@ -328,9 +344,9 @@ module Test = struct
     let name = sprintf "Command `%s` succeeds" cmd in
     genspio name
       Genspio.EDSL.(gassert name (exec ["sh"; "-c"; cmd] |> succeeds))
-      
 
-    
+
+
 
 
 end
@@ -407,17 +423,26 @@ module Image = struct
           Test.succeeds "whoami | grep biokepi";
           Test.succeeds "ls /usr/include/bzlib.h"; (* Needed for bcftools *)
           aws_cli_version;
+          Test.succeeds "ls /sbin/mount.nfs"; (* AWS nodes need to mount EFSs *)
         ];
       make "coclobas-gke-dev"
         ~dockerfile:(coclobas ~with_gcloud:true ~ketrew:(`Branch "master")
-                       ~coclobas:(`Branch "master") ());
+                       ~coclobas:(`Branch "master") ())
+        ~tests:[
+          Test.test_dashdashversion "ketrew" "3.1.0+dev";
+          ketrew_with_pg;
+          (* coclobas --version gives: "0.0.2-dev+<commit-hash-prefix>": *)
+          Test.succeeds "coclobas --version | grep 0.0.2-dev";
+          Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.2-dev";
+        ];
       make "coclobas-gke-biokepi-default"
         ~description:"The default image used by Secotrec for GKE/Local \
                       deployments, it has `gcloud`, `gcloudnfs`, the Biokepi \
                       NFS-friendly user, TLS-tunnel, Coclobas 0.0.1 and \
                       Ketrew `master` branch (until next version)."
         ~dockerfile:(coclobas ~with_gcloud:true ~with_gcloudnfs:true
-                       ~with_biokepi_user:true ~with_secotrec_gke:true
+                       ~with_biokepi_user:true
+                       ~with_secotrec_stuff:true
                        ~ketrew:(`Branch "master")
                        ~coclobas:(`Version "0.0.1") ())
         ~tests:begin
@@ -445,7 +470,7 @@ module Image = struct
         ~description:"Image similar to `coclobas-gke-biokepi-default` but \
                       with Coclobas pinned to its `master` branch."
         ~dockerfile:(coclobas ~with_gcloud:true ~with_gcloudnfs:true
-                       ~with_biokepi_user:true ~with_secotrec_gke:true
+                       ~with_biokepi_user:true ~with_secotrec_stuff:true
                        ~ketrew:(`Branch "master")
                        ~coclobas:(`Branch "master") ())
         ~tests:[
@@ -457,11 +482,11 @@ module Image = struct
         ];
       make "coclobas-aws-biokepi-dev"
         ~description:"Image similar to `coclobas-gke-biokepi-default` but \
-                      with Coclobas pinned to its `master` branch and `aws` \
-                      instead of `gcloud`."
+                      with Coclobas pinned to its `master` branch and we \
+                      provide `aws` instead of `gcloud`."
         ~dockerfile:(coclobas ~with_aws:true
                        ~with_biokepi_user:true
-                       ~with_secotrec_gke:true
+                       ~with_secotrec_stuff:true
                        ~ketrew:(`Branch "master")
                        ~coclobas:(`Branch "master") ())
         ~tests:[
@@ -496,6 +521,12 @@ module Image = struct
                       projects with various tools (text editors, git-hub, \
                       Epidisco)."
         ~dockerfile:(epidisco_dev ());
+      make "tlstunnel"
+        ~description:"Simple image with TLSTunnel installed from Opam."
+        ~tests:[
+          Test.test_dashdashversion "tlstunnel" "0.1.3";
+        ]
+        ~dockerfile:(tlstunnel ());
     ]
 
 end
@@ -523,7 +554,7 @@ module Github_repo = struct
     let name = sprintf "commit-%s" branch in
     seq_succeeds_or ~silent:false ~clean_up:[fail] ~name [
       if_seq (exec ["git"; "diff"; "--quiet"; "--exit-code"]
-              |> returns ~value:0) 
+              |> returns ~value:0)
         ~t:[
           sayf "Nothing to commit for %s" branch;
         ]
@@ -573,7 +604,7 @@ module Github_repo = struct
       See also the Docker-hub \
        [tags](https://hub.docker.com/r/hammerlab/keredofi/tags/).\n\n\
       "
-      ^ String.concat ~sep:"" 
+      ^ String.concat ~sep:""
         (List.map dockerfiles ~f:(fun im ->
              let dockerfile_github =
                sprintf
@@ -612,12 +643,12 @@ module Test_build = struct
   }
 
   let build_all_workflow
-      ?push_to_docker_hub 
+      ?push_to_docker_hub
       ~repository
       ~coclobas_tmp_dir ~coclobas_base_url ?(rebuild_tags = []) l =
     let open Ketrew.EDSL in
     let tmp_dir =
-      (* 
+      (*
          This directory is mounted by the Ketrew and Coclobas containers as
          well as all the local-docker jobs (as
          `Coclobas_ketrew_backend.Plugin.extra_mount_container_side`).
@@ -698,19 +729,29 @@ module Test_build = struct
           ~name:(sprintf "Pushing %s to the Docker-hub" (Image.tag image))
           ~edges:[with_tests image]
           ~make:(run_program Program.(chain [
-                  exec ["echo"; sprintf "Pushing %s" (Image.tag image)];
-                  exec ["docker"; "login";
-                        "--username"; username;
-                        "--password"; password;];
-                  exec [
-                    "docker";"push";
-                    sprintf "%s:%s" repository (Image.tag image);
-                  ];
+              exec ["echo"; sprintf "Pushing %s" (Image.tag image)];
+              exec ["docker"; "login";
+                    "--username"; username;
+                    "--password"; password;];
+              exec [
+                "docker";"push";
+                sprintf "%s:%s" repository (Image.tag image);
+              ];
             ]))
         |> depends_on
     in
-    workflow_node without_product
-      ~name:"Test-Build All Images"
+    let name =
+      sprintf "Build-Test%s %d Image%s: %s/{%s}"
+        (if push_to_docker_hub = None then "" else "-Push")
+        (List.length l)
+        (match l with [one] -> "" | _ -> "s")
+        repository
+        (List.map l ~f:Image.tag |> String.concat ~sep:","
+         |> fun s ->
+         (match String.sub s ~index:0 ~length:30 with
+         | None -> s | Some s -> s ^ "…"))
+    in
+    workflow_node without_product ~name
       ~edges:(List.map l ~f:(fun v -> with_push_to_hub v))
 
 
@@ -725,7 +766,7 @@ module Repository = struct
     pure (fun repo ->
         List.iter Image.all ~f:(fun i ->
             printf "====== Making %s ======\n%!" (Image.show i);
-            Github_repo.write repo.path i); 
+            Github_repo.write repo.path i);
         Github_repo.write_readme repo.path Image.all;
         cmdf
           "cd %s && \
