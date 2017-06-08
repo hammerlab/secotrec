@@ -118,6 +118,7 @@ type t = {
   db : Postgres.t option;
   dns : Gcloud_dns.t option;
   extra_nfs_servers : Extra_nfs_server.t list;
+  efs : Aws_efs.t option;
   ketrew : Ketrew_server.t option;
   coclobas : Coclobas.t option;
   letsencrypt : Letsencrypt.t option;
@@ -325,6 +326,14 @@ module Run = struct
         )
       )
     );
+    Option.iter t.efs ~f:begin fun efs ->
+      let aws_cli = Aws_cli.guess () in
+      run_genspio ~name:"efs-up" ~returns:0 (
+        on_node t (
+          Aws_efs.To_genspio.ensure aws_cli efs
+        )
+      );
+    end;
     run_genspio ~name:"deploy-up" ~returns:0 (
       on_node t (
         seq [
@@ -389,6 +398,12 @@ module Run = struct
       on_node t docker_compose_status_cmd;
       on_node t coclobas_status_cmd;
       on_node t ketrew_status_cmd;
+      Option.value_map ~default:nop t.efs ~f:begin fun efs ->
+        let aws_cli = Aws_cli.guess () in
+        on_node t (
+          Aws_efs.To_genspio.describe aws_cli efs
+        )
+      end;
       Option.value_map t.ketrew ~default:nop ~f:(fun kserver ->
           begin
             let cmd =
@@ -415,24 +430,30 @@ module Run = struct
     run_genspio (seq [
         seq (
           List.map t.extra_nfs_servers ~f:(fun nfs ->
-            seq [
-              sayf "Destroying the Extra-NFS server...";
-              on_node t (
-                let enfs = nfs.Extra_nfs_server.server in
-                if_seq
-                  (Gcloud_instance.instance_is_up (Nfs.Fresh.instance enfs))
-                  ~t:[
-                    exec [
-                      "sudo"; "docker"; "run";
-                      "hammerlab/keredofi:coclobas-gke-biokepi-default";
-                      "sh"; "-c";
-                      genspio_to_one_liner ~name:"destroy-nfs"
-                        (Nfs.Fresh.destroy enfs);
+              seq [
+                sayf "Destroying the Extra-NFS server...";
+                on_node t (
+                  let enfs = nfs.Extra_nfs_server.server in
+                  if_seq
+                    (Gcloud_instance.instance_is_up (Nfs.Fresh.instance enfs))
+                    ~t:[
+                      exec [
+                        "sudo"; "docker"; "run";
+                        "hammerlab/keredofi:coclobas-gke-biokepi-default";
+                        "sh"; "-c";
+                        genspio_to_one_liner ~name:"destroy-nfs"
+                          (Nfs.Fresh.destroy enfs);
+                      ]
                     ]
-                  ]
-                  ~e:[sayf "NFS extra server is already down"]
-              );
-            ]));
+                    ~e:[sayf "NFS extra server is already down"]
+                );
+              ]));
+        Option.value_map ~default:nop t.efs ~f:begin fun efs ->
+          let aws_cli = Aws_cli.guess () in
+          on_node t (
+            Aws_efs.To_genspio.destroy aws_cli efs
+          )
+        end;
         Option.value_map t.gke_cluster ~default:nop ~f:(fun kube ->
             seq [
               sayf "Shutting down the cluster...";
