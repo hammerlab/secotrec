@@ -76,8 +76,8 @@ let to_service t =
         exec ["sudo"; "chmod"; "666"; "/var/run/docker.sock"];
       ]
     | `Aws_batch { Aws_batch_cluster. queue; bucket } ->
-      let key_id = Sys.getenv "AWS_KEY_ID" in
-      let access_key = Sys.getenv "AWS_SECRET_KEY" in
+      let key_id = env_exn "AWS_KEY_ID" in
+      let access_key = env_exn "AWS_SECRET_KEY" in
       let aws_conf (k, v) =
         exec ["aws"; "configure"; "set"; k; v] in
       List.map ~f:aws_conf [
