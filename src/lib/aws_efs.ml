@@ -1,30 +1,5 @@
 open Common
 
-module Aws_cli = struct
-  type t = {
-    access_key: string [@env "AWS_KEY_ID"];
-    (** AWS Access Key ID (looks like "AKIDEDJEIIDDENJNJDE435F"). *)
-
-    secret_key: string [@env "AWS_SECRET_KEY"];
-    (** AWS Secret Access Key (looks like "8fJIDe933900n45GTe9deiDJEIjj/deyRdiO90C"). *)
-
-    default_region: string [@default "us-east-1"];
-    (** AWS Configured default region. *)
-
-  } [@@deriving make, cmdliner]
-
-  let configure t =
-    let open Genspio.EDSL in
-    let set k v =
-      exec ["aws"; "configure"; "set"; k; v] in
-    seq [
-      set "aws_access_key_id" t.access_key;
-      set "aws_secret_access_key" t.secret_key;
-      set "default.region" t.default_region;
-    ]
-
-end
-
 let tr_remove_new_lines = Genspio.EDSL.exec ["tr"; "-d"; "\\n"]
 
 type guess_value = [ `From_metadata | `Value of string ] [@@deriving yojson]

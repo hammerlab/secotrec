@@ -47,13 +47,13 @@ let () =
     Cmdliner.Term.(
       eval_choice default [
         pure efs_up
-        $ Secotrec.Aws_efs.Aws_cli.cmdliner_term ()
+        $ Secotrec.Aws_cli.cmdliner_term ()
         $ efs_test_cmdliner_term (), info "up";
         pure efs_describe
-        $ Secotrec.Aws_efs.Aws_cli.cmdliner_term ()
+        $ Secotrec.Aws_cli.cmdliner_term ()
         $ efs_test_cmdliner_term (), info "describe";
         pure efs_down
-        $ Secotrec.Aws_efs.Aws_cli.cmdliner_term ()
+        $ Secotrec.Aws_cli.cmdliner_term ()
         $ efs_test_cmdliner_term (), info "down";
       ]) in
   begin match clires with

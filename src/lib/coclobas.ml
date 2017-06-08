@@ -76,15 +76,16 @@ let to_service t =
         exec ["sudo"; "chmod"; "666"; "/var/run/docker.sock"];
       ]
     | `Aws_batch { Aws_batch_cluster. queue; bucket } ->
-      let key_id = env_exn "AWS_KEY_ID" in
-      let access_key = env_exn "AWS_SECRET_KEY" in
-      let aws_conf (k, v) =
-        exec ["aws"; "configure"; "set"; k; v] in
-      List.map ~f:aws_conf [
-        "aws_access_key_id", key_id;
-        "aws_secret_access_key", access_key;
-        "default.region", "us-east-1";
-      ]
+      (* let key_id = env_exn "AWS_KEY_ID" in *)
+      (* let access_key = env_exn "AWS_SECRET_KEY" in *)
+      (* let aws_conf (k, v) = *)
+      (*   exec ["aws"; "configure"; "set"; k; v] in *)
+      (* List.map ~f:aws_conf [ *)
+      (*   "aws_access_key_id", key_id; *)
+      (*   "aws_secret_access_key", access_key; *)
+      (*   "default.region", "us-east-1"; *)
+      (* ] *)
+      Aws_cli.[guess () |> configure]
   in
   let start_up_script =
     Genspio.EDSL.(
