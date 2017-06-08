@@ -14,6 +14,7 @@ module Node = struct
     host : [
       | `Localhost
       | `Gcloud of Gcloud_instance.t
+      | `Aws_ssh of Aws_instance.Ssh.t
     ] [@main];
     properties: property list;
   } [@@deriving make]
@@ -21,6 +22,7 @@ module Node = struct
   let localhost ?properties () =
     make `Localhost ?properties
   let gcloud ?properties g = make (`Gcloud g) ?properties
+  let aws_ssh ?properties a = make (`Aws_ssh a) ?properties
 end
 
 module Extra_nfs_server = struct
@@ -146,6 +148,8 @@ module Run = struct
       let tmp = Filename.temp_file "secotrec" "script.sh" in
       write_file tmp ~content:(Genspio.Language.to_many_lines cmd);
       Genspio_edsl.exec ["sh"; tmp]
+    | `Aws_ssh a ->
+      Aws_instance.Ssh.run_on ~name a cmd
 
   let cp_from_node t file_from file_to =
     match t.node.Node.host with
@@ -153,10 +157,23 @@ module Run = struct
       Gcloud_instance.copy_file node (`On_node file_from) (`Local file_to)
     | `Localhost ->
       Genspio_edsl.exec ["cp"; file_from; file_to]
+    | `Aws_ssh node ->
+      let name = sprintf "cp_from_node" in
+      let open Genspio_edsl in
+      seq_succeeds_or ~clean_up:[fail] ~name (
+        Aws_instance.Ssh.copy_file node (`On_node file_from) (`Local file_to)
+      )
+
   let cp_to_node t file_from file_to =
     match t.node.Node.host with
     | `Gcloud node ->
       Gcloud_instance.copy_file node (`Local file_from) (`On_node file_to)
+    | `Aws_ssh node ->
+      let name = sprintf "cp_to_node" in
+      let open Genspio_edsl in
+      seq_succeeds_or ~clean_up:[fail] ~name (
+        Aws_instance.Ssh.copy_file node (`Local file_from) (`On_node file_to)
+      )
     | `Localhost ->
       Genspio_edsl.exec ["cp"; file_from; file_to]
 
@@ -186,6 +203,10 @@ module Run = struct
       run_genspio Genspio_edsl.(seq [
           create_directories;
         ])
+    | `Aws_ssh node ->
+      run_genspio Genspio_edsl.(seq [
+          on_node t create_directories;
+        ])
 
   let destroy_node t =
     let open Genspio_edsl in
@@ -195,14 +216,14 @@ module Run = struct
         sayf "Shutting down the GCHost...";
         Gcloud_instance.destroy node;
       ]
-    | `Localhost ->
-      nop
+    | `Localhost -> nop
+    | `Aws_ssh _ -> nop
 
 
   let only_gcloud_node ~msg t f =
     match t.node.Node.host with
     | `Gcloud node -> f node
-    | `Localhost ->
+    | `Localhost | `Aws_ssh _ ->
       ksprintf failwith
         "The feature “%s” is only available on GCloud instances"
         msg
@@ -214,7 +235,7 @@ module Run = struct
 
   let use_sudo t =
     match t.node.Node.host with
-    | `Gcloud _ -> true
+    | `Gcloud _ | `Aws_ssh _ -> true
     | `Localhost -> false
 
   let docker_compose_command ?with_software ?save_output t more =
@@ -315,6 +336,9 @@ module Run = struct
   let node_ip_address t =
     match t.node.Node.host with
     | `Gcloud node -> `External (Gcloud_instance.external_ip node)
+    | `Aws_ssh node ->
+      (* TODO: fix the name of the function or get the actuall IP address: *)
+      `External (Aws_instance.Ssh.hostname node |> Genspio_edsl.string)
     | `Localhost -> `Local
 
 
@@ -426,6 +450,8 @@ module Run = struct
           destroy_node t
         | `Localhost ->
           docker_compose_command t ["down"]
+        | `Aws_ssh node ->
+          sayf "Destruction of Aws-ssh nodes is not implemented"
         end;
       ])
 
