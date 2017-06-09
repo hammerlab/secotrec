@@ -10,6 +10,8 @@ type t = {
   guess_secgroup: guess_value [@default `From_metadata];
 } [@@deriving yojson, make]
 
+let default_mount_point t = sprintf "/mnt-%s" t.name
+
 module To_genspio = struct
   open Genspio_edsl
 
@@ -122,7 +124,7 @@ module To_genspio = struct
       ]
       |> get_successful_single_string ~or_else:fail
 
-  let mount_point t = ksprintf string "/mnt-%s" t.name
+  let mount_point t = string (default_mount_point t)
 
   let ensure_nfs_traffic_in_security_group t ~security_group =
     seq [

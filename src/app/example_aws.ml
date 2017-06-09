@@ -135,7 +135,24 @@ let deployment () =
       ~backend_address ~backend_port
       ~exposed_port
   in
+  let biokepi_machine =
+    Biokepi_machine_generation.make
+      ~default_work_dir:(Aws_efs.default_mount_point efs // "workdir")
+      ~coclobas
+      ~mounts:[]
+      "The-CocloKetrew-Machine" in
+  let preparation =
+    let open Data_preparation in
+    make [
+      download
+        "https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37decoy_20160927.tgz"
+        ~in_directory:(Aws_efs.default_mount_point efs  // "workdir/reference-genome");
+      download
+        "https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37_20161007.tgz"
+        ~in_directory:(Aws_efs.default_mount_point efs  // "workdir/reference-genome");
+    ] in
   Deployment.make "AWS-Test" ~node:(Deployment.Node.aws_ssh awsnode)
+    ~biokepi_machine ~preparation
     ~tlstunnel
     ~coclobas
     ~ketrew
