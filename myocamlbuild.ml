@@ -45,7 +45,7 @@ let simple_efs : Project.item =
   Project.app ("secotrec-aws-efs")
     ~bin_annot:()
     ~thread:()
-    ~file:"src/app/aws_efs.ml"
+    ~file:"src/app/aws_efs_test.ml"
     ~internal_deps:[lib]
 
 let aws_node =
