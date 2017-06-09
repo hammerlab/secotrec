@@ -25,7 +25,7 @@ let work_dir =
   with _ -> %S
 |ocaml} default_work_dir
     
-let optional_setup = {ocaml|
+let optional_setup ~default_docker_image = sprintf {ocaml|
 let install_tools_path =
   try env_exn "INSTALL_TOOLS_PATH"
   with _ -> work_dir // "toolkit"
@@ -40,10 +40,10 @@ let allow_daemonize =
   with _ -> false
 let image =
   try env_exn "DOCKER_IMAGE"
-  with _ -> "hammerlab/keredofi:biokepi-run-gcloud"
+  with _ -> %S
 let env_exn_tool_loc s tool =
   try (`Wget (Sys.getenv s)) with _ ->
-    `Fail (sprintf "No location provided for %s" tool)
+    `Fail (sprintf "No location provided for %%s" tool)
 let netmhc_tmpdir =
   try env_exn "NETMHC_TMPDIR"
   with _ -> "/tmp" (* local to each worker pod *)
@@ -59,6 +59,7 @@ let netmhc_config () = Biokepi.Setup.Netmhc.(
 let gatk_jar_location () = env_exn_tool_loc "GATK_JAR_URL" "GATK"
 let mutect_jar_location () = env_exn_tool_loc "MUTECT_JAR_URL" "MuTect"
 |ocaml}
+    default_docker_image
 
 let set_name name = {ocaml|
 let name = "Coclomachine"
@@ -167,6 +168,22 @@ let run_program_blob_for_gke = {ocaml|
         (with_more_info p)
   |ocaml}
   
+let run_program_blob_for_aws = {ocaml|
+    match how with
+    | `On_server_node ->
+      daemonize ~host ~using:`Python_daemon (with_more_info p)
+    | `Submit_to_coclobas ->
+      let cpus =
+        List.find_map requirements ~f:(function `Processors i -> Some i | _ -> None)
+        |> Option.value ~default:1 in
+      Coclobas_ketrew_backend.Plugin.aws_batch_program
+        ~memory:(`MB 40_000)
+        ~cpus
+        ~base_url:"http://coclo:8082"
+        ~image
+        (with_more_info p)
+|ocaml}
+
 type t = {
   name: string [@main ];
   default_work_dir: string;
@@ -184,14 +201,19 @@ let to_ocaml ?(with_script_header = true) t =
     | `GKE _ -> run_program_blob_for_gke
     | `Local _ -> run_program_blob_for_local_docker ~coclobas_service:t.coclobas
     | `Aws_batch _ ->
-      failwith "AWS-Batch biokepi-machine generation: NOT IMPLEMENTED"
+      run_program_blob_for_aws
   in
+  let default_docker_image =
+    match Coclobas.cluster t.coclobas with
+    | `GKE _
+    | `Local _ -> "hammerlab/keredofi:biokepi-run-gcloud"
+    | `Aws_batch _ -> "hammerlab/keredofi:biokepi-run-aws" in
   let pieces =
     only_if with_script_header [script_header]
     @ [
       pervasives_header;
       get_work_dir ~default_work_dir:t.default_work_dir;
-      optional_setup;
+      optional_setup ~default_docker_image;
       set_name t.name;
       make_volume_mounts t.mounts;
       biokepi_machine_value run_program_blob;
