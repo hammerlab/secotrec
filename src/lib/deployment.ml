@@ -326,17 +326,16 @@ module Run = struct
         )
       )
     );
-    Option.iter t.efs ~f:begin fun efs ->
-      let aws_cli = Aws_cli.guess () in
-      run_genspio ~name:"efs-up" ~returns:0 (
-        on_node t (
-          Aws_efs.To_genspio.ensure aws_cli efs
-        )
-      );
-    end;
     run_genspio ~name:"deploy-up" ~returns:0 (
+      let efs_ensure =
+        Option.map t.efs ~f:begin fun efs ->
+          let aws_cli = Aws_cli.guess () in
+          Aws_efs.To_genspio.ensure aws_cli efs
+          (* run_genspio ~name:"efs-up" ~returns:0 (on_node t (ensurer#ensure)); *)
+        end in
       on_node t (
         seq [
+          Option.value ~default:(sayf "No EFS to do.") efs_ensure;
           docker_compose_command ~with_software:false t ["up"; "-d"]
         ]
       );

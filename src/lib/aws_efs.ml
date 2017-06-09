@@ -247,6 +247,23 @@ module To_genspio = struct
       mount t ~mount_target_id:mount_target_id#get;
     ]
 
+  let full_mount_script t =
+    let aws_cli = Aws_cli.guess () in
+    let file_system_id = get_or_create_file_system_id t in
+    let mount_target_id =
+      get_or_create_mount_target t ~fs_id:file_system_id#get
+        ~subnet_id:(subnet_id ~aws_cli t)
+        ~secgrp_id:(security_group ~aws_cli t) in
+    Genspio_edsl.seq_succeeds_or
+      ~silent:false
+      ~clean_up:[fail]
+      ~name:"Mount EFS" [
+      Aws_cli.configure aws_cli;
+      file_system_id#build;
+      mount_target_id#build;
+      mount t ~mount_target_id:mount_target_id#get;
+    ]
+
   let describe ~aws_cli t =
     let file_system_id = get_or_create_file_system_id t in
     seq [

@@ -7,6 +7,7 @@ type t = {
   db: Postgres.t;
   image: string [@default "hammerlab/keredofi:coclobas-gke-biokepi-default"];
   nfs_mounts: Nfs.Mount.t list;
+  after_mounts: unit Genspio.EDSL.t [@default Genspio.EDSL.nop];
   port: int [@default 8080 ];
   local_volumes: (string * string) list;
   opam_pin: Opam.Pin.t list;
@@ -55,6 +56,7 @@ let to_service t =
         string config >> exec ["cat"]
         |> write_output ~stdout:(string config_path)
       end;
+      t.after_mounts;
       (* setenv (string "KETREW_CONFIGURATION") (string config_path); *)
       (* setenv (string "KETREW_BINARY") *)
       (*   (exec ["which"; "colobas-ketrew"] |> output_as_string); *)
