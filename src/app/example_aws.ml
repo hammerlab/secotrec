@@ -139,7 +139,7 @@ let deployment () =
     Biokepi_machine_generation.make
       ~default_work_dir:(Aws_efs.default_mount_point efs // "workdir")
       ~coclobas
-      ~mounts:[]
+      ~mounts:[`Aws_efs efs]
       "The-CocloKetrew-Machine" in
   let preparation =
     let open Data_preparation in

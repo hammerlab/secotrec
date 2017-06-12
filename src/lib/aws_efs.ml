@@ -249,7 +249,7 @@ module To_genspio = struct
       mount t ~mount_target_id:mount_target_id#get;
     ]
 
-  let full_mount_script t =
+  let full_mount_script ?owner t =
     let aws_cli = Aws_cli.guess () in
     let file_system_id = get_or_create_file_system_id t in
     let mount_target_id =
@@ -264,6 +264,13 @@ module To_genspio = struct
       file_system_id#build;
       mount_target_id#build;
       mount t ~mount_target_id:mount_target_id#get;
+      begin match owner with
+      | None -> nop
+      | Some (user, grp) ->
+        call [string "sudo";
+              string "chown"; string (sprintf "%s:%s" user grp);
+              mount_point t]
+      end
     ]
 
   let describe ~aws_cli t =
