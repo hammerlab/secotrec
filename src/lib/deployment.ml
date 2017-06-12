@@ -522,9 +522,8 @@ module Run = struct
       let out, clos =
         Option.value_map path ~f:(fun p -> open_out p, close_out)
           ~default:(stdout, fun _ -> ()) in
-      let env k v =
-        fprintf out "export %s=%s\n%!" k v
-      in
+      let env k v = fprintf out "export %s=%s\n%!" k v in
+      let cmt s = fprintf out "# %s\n%!" s in
       let opt_iter ~f = function None -> () | Some x -> f x in
       opt_iter t.db ~f:begin fun pg ->
         env "PG_SERVICE_NAME" (Postgres.container_name pg);
@@ -538,6 +537,22 @@ module Run = struct
       end;
       opt_iter t.ketrew ~f:begin fun ks ->
         env "KETREW_SERVICE_NAME" (Ketrew_server.name ks);
+      end;
+      begin
+        let out s = env "CURRENT_BIOKEPI_WORK_DIR" s in
+        begin match Sys.getenv "BIOKEPI_WORK_DIR" with
+        | s -> out s
+        | (exception _) -> cmt "BIOKEPI_WORK_DIR is not overridden; \
+                                the current is the default."
+        end;
+        begin match t.biokepi_machine with
+        | Some biok ->
+          out biok.Biokepi_machine_generation.default_work_dir;
+          env "DEFAULT_BIOKEPI_WORK_DIR"
+            biok.Biokepi_machine_generation.default_work_dir;
+        | None ->
+          cmt "Biokepi-machine (hence default-biokepi-work-dir) not defined."
+        end;
       end;
       clos out;
       ()
