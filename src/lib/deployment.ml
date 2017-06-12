@@ -572,16 +572,48 @@ module Run = struct
 
   let test_biokepi_machine ?userinfo t =
     let biomachine =
-      Biokepi_machine_generation.to_ocaml ~with_script_header:true
-        (Option.value_exn t.biokepi_machine
-           ~msg:"missing biokepi-machine definition") in
+      Option.value_exn t.biokepi_machine
+        ~msg:"missing biokepi-machine definition" in
+    let machine_script =
+      Biokepi_machine_generation.to_ocaml ~with_script_header:true biomachine in
     let workflow =
-      {ocaml|
+      let part_1 =
+        {ocaml|
 let workflow =
    let open Biokepi in
    let open KEDSL in
    let program =
-     Program.(sh "du -sh $HOME")
+     let open Program in
+     let cmd c =
+       let shorten s =
+         match String.sub s ~index:0 ~length:50 with
+         | None -> s | Some s -> s ^ "…" in
+       shf "echo \"## Secotrec Test of Biokepi machine: %s\""
+         (Filename.quote (shorten c))
+       && shf "%s || { echo 'Command failed' ; echo failure >> /tmp/failures ; }" c
+     in
+     chain [
+|ocaml} in
+      let part_2 =
+        let cmdf fmt = ksprintf (sprintf "cmd %S;") fmt in
+        let workdir_to_test =
+          try Sys.getenv "BIOKEPI_WORK_DIR" with
+          | _ ->
+            biomachine.Biokepi_machine_generation.default_work_dir in
+        let test_file =
+          workdir_to_test // sprintf "secotest-%s.txt"
+            ODate.Unix.(now () |> Printer.to_iso) in
+        String.concat ~sep:"\n" [
+          cmdf "ls -la $HOME";
+          cmdf "mkdir -p %s" workdir_to_test;
+          cmdf "echo 'Secotrec Biokepi Test' $(date) > %s" test_file;
+          cmdf "ls -la %s" workdir_to_test;
+          cmdf "cat %s" test_file;
+        ] in
+      let part_3 =
+        {ocaml|
+     ]
+     && sh "if [ -f /tmp/failures ] ; then exit 1 ; else exit 0 ; fi"
    in
    let name = "Test of the biokepi machine" in
    let make = Machine.run_program ~name biokepi_machine program in
@@ -589,11 +621,12 @@ let workflow =
    workflow_node ~name without_product
      ~make
 |ocaml} in
+      part_1 ^ part_2 ^ part_3 in
     let kconfdir = Filename.get_temp_dir_name () // "kconf" in
     Generate.ketrew_configuration ?userinfo t ~path:kconfdir;
     let submission =
       sprintf
-{ocaml|
+        {ocaml|
 let () =
   let override_configuration =
     Ketrew.Configuration.load_exn ~and_apply:true (`In_directory %S) in
@@ -601,7 +634,7 @@ Ketrew.Client.submit_workflow workflow ~override_configuration
 |ocaml} kconfdir in
     write_file "/tmp/script.ml"
       (sprintf "%s\n\n%s\n\n%s\n"
-         biomachine workflow submission);
+         machine_script workflow submission);
     cmdf "ocaml /tmp/script.ml"
 
   let psql t ~args =
