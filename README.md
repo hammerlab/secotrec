@@ -7,7 +7,7 @@ generic deployments.
 
 It comes with 2 preconfigured “examples”. You should pick one.
 
-1. `secotrec-gke`: 
+1. `secotrec-gke`:
     - sets up a new GCloud host with a bunch of services:
       Postgresql, Ketrew, Coclobas (in GKE mode), Tlstunnel (with valid
       domain-name and certificate), and optionally an `nginx` basic-auth HTTP
@@ -16,7 +16,7 @@ It comes with 2 preconfigured “examples”. You should pick one.
     - it also deals with the GKE cluster, firewall rules, etc.
 2. `secotrec-local`: sets up Postgresql, Ketrew, and Coclobas (in local docker
    mode) running locally or on a fresh GCloud box.
-   
+
 Both examples have the option of preparing the default biokepi-work directory
 with
 [`b37decoy_20160927.tgz`](https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37decoy_20160927.tgz) and
@@ -28,7 +28,7 @@ as `Dockerfile` generation tool.
 Install
 -------
 
-You can install secotrec either from Opam or from a Docker image. 
+You can install secotrec either from Opam or from a Docker image.
 
 ### Option 1: With Opam
 
@@ -127,12 +127,12 @@ Output should say that all services are up:
 
 ```
 ...
-       Name                      Command               State           Ports          
+       Name                      Command               State           Ports
 -------------------------------------------------------------------------------------
-coclotest_coclo_1     opam config exec -- /bin/b ...   Up      0.0.0.0:8082->8082/tcp 
-coclotest_kserver_1   opam config exec -- dash - ...   Up      0.0.0.0:8080->8080/tcp 
-coclotest_pg_1        /docker-entrypoint.sh postgres   Up      0.0.0.0:5432->5432/tcp 
-coclotest_tlstun_1    opam config exec -- sh -c  ...   Up      0.0.0.0:443->8443/tcp  
+coclotest_coclo_1     opam config exec -- /bin/b ...   Up      0.0.0.0:8082->8082/tcp
+coclotest_kserver_1   opam config exec -- dash - ...   Up      0.0.0.0:8080->8080/tcp
+coclotest_pg_1        /docker-entrypoint.sh postgres   Up      0.0.0.0:5432->5432/tcp
+coclotest_tlstun_1    opam config exec -- sh -c  ...   Up      0.0.0.0:443->8443/tcp
 ...
 ```
 
@@ -220,13 +220,18 @@ secotrec-gke --help
 
 #### Destroy
 
-Take down everything with:
+Take down everything (including the Extra-NFS server and its storage)
+with the following command:
 
 ```
-secotrec-gke down
+secotrec-gke down --confirm
+
 ```
 
-**Warning:** this includes the Extra-NFS server and its storage!
+Note that this action requires the additional `--confirm` argument
+to prevent destroying the secotrec setup accidentally. `-y`, `--yes`,
+`--really`, and `--please` are other alternatives that can be
+used to confirm the destroy procedure.
 
 
 ### Secotrec-local
@@ -276,7 +281,7 @@ Write the `Dockerfile`s in their respective branches and commit if something
 changed:
 
     secotrec-make-dockerfiles write --path=/path/to/keredofi
-    
+
 when done, the tool displays the Git graph of the Keredofi repo; if you're
 happy, just go there and `git push --all`.
 
@@ -300,7 +305,7 @@ When in the environment `WITH_AWS_NODE` is `true`, and application
 `secotrec-aws-node` is built, see:
 
     secotrec-aws-node --help
-    
+
 For now the this uses the AWS API to setup a “ready-to-use” EC2 server.
 
 The build requires `master` versions of: `aws` and `aws-ec2`:

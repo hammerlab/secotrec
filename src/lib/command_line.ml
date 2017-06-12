@@ -127,8 +127,23 @@ let deployment_commands (deployment : unit -> Deployment.t) =
     argless_sub_command "up" ~doc:"Bring the deployment UP." Deployment.Run.up
   in
   let down =
-    argless_sub_command "down" ~doc:"Bring the deployment DOWN."
-      Deployment.Run.down in
+    let please_arg =
+      Arg.(value @@ flag @@ info ["y"; "yes"; "really"; "please"; "confirm";]
+             ~doc:"Confirm and bring the whole deployment down.")
+    in
+    let confirm_down deployment please =
+      if please
+      then (`Ok (Deployment.Run.down deployment))
+      else `Help (`Plain, Some "down")
+    in
+    sub_command
+      ~info:Term.(info "down"
+                    ~version ~sdocs:"COMMON OPTIONS" ~man:[]
+                    ~doc:("Bring the deployment DOWN \
+                           (i.e. secobox, cluster, and NFS servers.)"))
+      ~term: Term.(
+          ret (const confirm_down $ deployment_arg $ please_arg)
+        ) in
   let status =
     argless_sub_command "status" ~doc:"Get the status of the deployment."
       Deployment.Run.status in
