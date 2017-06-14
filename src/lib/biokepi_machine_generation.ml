@@ -24,7 +24,7 @@ let work_dir =
     env_exn "BIOKEPI_WORK_DIR"
   with _ -> %S
 |ocaml} default_work_dir
-    
+
 let optional_setup ~default_docker_image = sprintf {ocaml|
 let install_tools_path =
   try env_exn "INSTALL_TOOLS_PATH"
@@ -177,15 +177,18 @@ let run_program_blob_for_gke = {ocaml|
         ~volume_mounts
         (with_more_info p)
   |ocaml}
-  
+
 let run_program_blob_for_aws = {ocaml|
     match how with
     | `On_server_node ->
       daemonize ~host ~using:`Python_daemon (with_more_info p)
     | `Submit_to_coclobas ->
-      let cpus =
-        List.find_map requirements ~f:(function `Processors i -> Some i | _ -> None)
-        |> Option.value ~default:1 in
+  (** For now we seem to need to ask for full nodes for the system not to
+      go nuts: *)
+      (* let cpus = *)
+      (*   List.find_map requirements ~f:(function `Processors i -> Some i | _ -> None) *)
+      (*   |> Option.value ~default:1 in *)
+      let cpus = 7 in
       let program_with_volume_mounts =
         let open Program in
         chain (List.map volume_mounts ~f:(function
@@ -197,11 +200,11 @@ let run_program_blob_for_aws = {ocaml|
         && (with_more_info p) in
       Coclobas_ketrew_backend.Plugin.aws_batch_program
         program_with_volume_mounts
-        ~memory:(`MB 40_000)
+        ~memory:(`MB 30_000)
         ~cpus
         ~base_url:"http://coclo:8082"
         ~image
-        
+
 |ocaml}
 
 type t = {
@@ -244,4 +247,3 @@ let to_ocaml ?(with_script_header = true) t =
     ]
   in
   String.concat ~sep:"\n" pieces
-
