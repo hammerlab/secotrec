@@ -91,7 +91,7 @@ let make_volume_mounts mounts =
 let biokepi_machine_value actual_run_program_blob =
 {ocaml|
 let biokepi_machine =
-  let host = Ketrew.EDSL.Host.parse "/tmp/KT-coclomachine/" in
+  let host = Ketrew.EDSL.Host.parse "/tmp/KT-coclomachine/?shell=bash" in
   let max_processors = 7 in
   let run_program ?name ?(requirements = []) p =
     let open Ketrew.EDSL in
