@@ -246,11 +246,12 @@ let deployment_commands (deployment : unit -> Deployment.t) =
         ) in
   let deploy_debug_node =
     let doc =
-      "Deploys a biokepi pod to the cluster that allows debugging the \
-       environment nodes live. The pod is automatically killed after \
-       sleeping for a given amount of time. Let it scheduled and deployed \
-       and once it is really running, you can connect and start a shell via
-       'kubectl exec -ti <POD_ID> bash'. Look for then '** DEBUG ME **'"
+      "Run a Biokepi-like job on the cluster that allows debugging the \
+       environment nodes live. The job dies automatically after \
+       sleeping for a given amount of time. Once scheduled and started, \
+       you can connect to it in a backend-dependent way (e.g. for the GKE, \
+       start a shell via \
+       `kubectl exec -ti <POD_ID> bash`)."
     in
     sub_command
       ~info:Term.(info "deploy-debug-node" ~doc
@@ -262,7 +263,7 @@ let deployment_commands (deployment : unit -> Deployment.t) =
           $ user_info_term
           $ Arg.(value & opt int 60
                  @@ info ["sleep-for"; "s"]
-                  ~doc:("The amount of time in minutes the pod is available.")
+                  ~doc:("The amount of time in minutes the job is available.")
                   ~docv:"60")
         ) in
   let backup_database =
