@@ -78,7 +78,7 @@ module Extra_nfs_server = struct
     in
     match of_string str with
     | List l ->
-      List.map l ~f:parse_one 
+      List.map l ~f:parse_one
     | other ->
       fail ~sexp:other ~expect:"(<server-definition-list>)"
         "Can't recognize the S-Expression pattern"
@@ -360,7 +360,7 @@ module Run = struct
                   (`External (string dns.Gcloud_dns.name))
                 >> exec ["cat"]);
             exec ["printf"; "\\n"];
-          ]) in 
+          ]) in
     seq [
       on_node t docker_compose_status_cmd;
       on_node t coclobas_status_cmd;
@@ -524,25 +524,22 @@ module Run = struct
       Ketrew.Configuration.load_exn ~and_apply:true (`In_directory kconfdir) in
     Ketrew.Client.submit_workflow wf ~override_configuration
 
-  let test_biokepi_machine ?userinfo t =
+  let create_simple_test_job ?userinfo ~cmd_str ~name t =
     let biomachine =
       Biokepi_machine_generation.to_ocaml ~with_script_header:true
         (Option.value_exn t.biokepi_machine
            ~msg:"missing biokepi-machine definition") in
     let workflow =
-      {ocaml|
+      sprintf
+{ocaml|
 let workflow =
    let open Biokepi in
    let open KEDSL in
-   let program =
-     Program.(sh "du -sh $HOME")
-   in
-   let name = "Test of the biokepi machine" in
+   let program = Program.(sh "%s") in
    let make = Machine.run_program ~name biokepi_machine program in
-   (* let host = Machine.(as_host biokepi_machine) in *)
-   workflow_node ~name without_product
-     ~make
-|ocaml} in
+   let name = "%s" in
+   workflow_node ~name without_product ~make
+|ocaml} cmd_str name in
     let kconfdir = Filename.get_temp_dir_name () // "kconf" in
     Generate.ketrew_configuration ?userinfo t ~path:kconfdir;
     let submission =
@@ -557,6 +554,19 @@ Ketrew.Client.submit_workflow workflow ~override_configuration
       (sprintf "%s\n\n%s\n\n%s\n"
          biomachine workflow submission);
     cmdf "ocaml /tmp/script.ml"
+
+
+  let deploy_debug_node ~minutes ?userinfo t =
+    let cmd_str = sprintf "sleep %d" (minutes * 60) in (* mins -> secs *)
+    let name = sprintf "** DEBUG ME in %d mins **" minutes in
+    create_simple_test_job ~cmd_str ~name t
+
+
+  let test_biokepi_machine ?userinfo t =
+    let cmd_str = "du -sh $HOME" in
+    let name = "Test of the biokepi machine" in
+    create_simple_test_job ~cmd_str ~name t
+
 
   let psql t ~args =
     let db, container =

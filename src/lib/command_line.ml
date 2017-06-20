@@ -244,6 +244,27 @@ let deployment_commands (deployment : unit -> Deployment.t) =
           $ deployment_arg
           $ user_info_term
         ) in
+  let deploy_debug_node =
+    let doc =
+      "Deploys a biokepi pod to the cluster that allows debugging the \
+       environment nodes live. The pod is automatically killed after \
+       sleeping for a given amount of time. Let it scheduled and deployed \
+       and once it is really running, you can connect and start a shell via
+       'kubectl exec -ti <POD_ID> bash'. Look for then '** DEBUG ME **'"
+    in
+    sub_command
+      ~info:Term.(info "deploy-debug-node" ~doc
+                    ~version ~sdocs:"COMMON OPTIONS" ~man:[])
+      ~term: Term.(
+          pure (fun deployment userinfo minutes ->
+              Deployment.Run.deploy_debug_node ?userinfo ~minutes deployment)
+          $ deployment_arg
+          $ user_info_term
+          $ Arg.(value & opt int 60
+                 @@ info ["sleep-for"; "s"]
+                  ~doc:("The amount of time in minutes the pod is available.")
+                  ~docv:"60")
+        ) in
   let backup_database =
     sub_command
       ~info:Term.(info "backup-database"
@@ -306,7 +327,7 @@ let deployment_commands (deployment : unit -> Deployment.t) =
     up; down; status; top; psql;
     coclobas_client; make_command_alias coclobas_client "cc";
     ketrew_configuration; biokepi_machine; useful_env;
-    docker_compose_config;
+    deploy_debug_node; docker_compose_config;
     preparation_workflow; test_biokepi_machine;
     backup_database; restore_database_backup;
     coclobas_logs; ketrew_logs;
