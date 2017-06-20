@@ -80,7 +80,7 @@ module Extra_nfs_server = struct
     in
     match of_string str with
     | List l ->
-      List.map l ~f:parse_one 
+      List.map l ~f:parse_one
     | other ->
       fail ~sexp:other ~expect:"(<server-definition-list>)"
         "Can't recognize the S-Expression pattern"
@@ -392,7 +392,7 @@ module Run = struct
                   (`External (string dns.Gcloud_dns.name))
                 >> exec ["cat"]);
             exec ["printf"; "\\n"];
-          ]) in 
+          ]) in
     seq [
       on_node t docker_compose_status_cmd;
       on_node t coclobas_status_cmd;
@@ -585,7 +585,7 @@ module Run = struct
       Ketrew.Configuration.load_exn ~and_apply:true (`In_directory kconfdir) in
     Ketrew.Client.submit_workflow wf ~override_configuration
 
-  let test_biokepi_machine ?userinfo t =
+  let create_simple_test_job ?userinfo ~commands ~name t =
     let biomachine =
       Option.value_exn t.biokepi_machine
         ~msg:"missing biokepi-machine definition" in
@@ -593,7 +593,7 @@ module Run = struct
       Biokepi_machine_generation.to_ocaml ~with_script_header:true biomachine in
     let workflow =
       let part_1 =
-        {ocaml|
+{ocaml|
 let workflow =
    let open Biokepi in
    let open KEDSL in
@@ -618,24 +618,30 @@ let workflow =
         let test_file =
           workdir_to_test // sprintf "secotest-%s.txt"
             ODate.Unix.(now () |> Printer.to_iso) in
-        String.concat ~sep:"\n" [
-          cmdf "ls -la $HOME";
-          cmdf "mkdir -p %s" workdir_to_test;
-          cmdf "echo 'Secotrec Biokepi Test' $(date) > %s" test_file;
-          cmdf "ls -la %s" workdir_to_test;
-          cmdf "cat %s" test_file;
-        ] in
+        begin match commands with
+        | `Custom cmd ->
+          cmdf "%s" cmd
+        | `Test_workdir ->
+          String.concat ~sep:"\n" [
+            cmdf "ls -la $HOME";
+            cmdf "mkdir -p %s" workdir_to_test;
+            cmdf "echo 'Secotrec Biokepi Test' $(date) > %s" test_file;
+            cmdf "ls -la %s" workdir_to_test;
+            cmdf "cat %s" test_file;
+          ]
+        end
+      in
       let part_3 =
-        {ocaml|
+        sprintf
+{ocaml|
      ]
      && sh "if [ -f /tmp/failures ] ; then exit 1 ; else exit 0 ; fi"
    in
-   let name = "Test of the biokepi machine" in
+   let name = %S in
    let make = Machine.run_program ~name biokepi_machine program in
    (* let host = Machine.(as_host biokepi_machine) in *)
-   workflow_node ~name without_product
-     ~make
-|ocaml} in
+   workflow_node ~name without_product ~make
+|ocaml} name in
       part_1 ^ part_2 ^ part_3 in
     let kconfdir = Filename.get_temp_dir_name () // "kconf" in
     Generate.ketrew_configuration ?userinfo t ~path:kconfdir;
@@ -651,6 +657,18 @@ Ketrew.Client.submit_workflow workflow ~override_configuration
       (sprintf "%s\n\n%s\n\n%s\n"
          machine_script workflow submission);
     cmdf "ocaml /tmp/script.ml"
+
+
+  let deploy_debug_node ~minutes ?userinfo t =
+    let cmd_str = sprintf "sleep %d" (minutes * 60) in (* mins -> secs *)
+    let name = sprintf "** DEBUG ME in %d mins **" minutes in
+    create_simple_test_job ~commands:(`Custom cmd_str) ~name t
+
+
+  let test_biokepi_machine ?userinfo t =
+    let name = "Test of the biokepi machine" in
+    create_simple_test_job ~name t ~commands:`Test_workdir
+
 
   let psql t ~args =
     let db, container =

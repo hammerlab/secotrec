@@ -127,8 +127,23 @@ let deployment_commands (deployment : unit -> Deployment.t) =
     argless_sub_command "up" ~doc:"Bring the deployment UP." Deployment.Run.up
   in
   let down =
-    argless_sub_command "down" ~doc:"Bring the deployment DOWN."
-      Deployment.Run.down in
+    let please_arg =
+      Arg.(value @@ flag @@ info ["y"; "yes"; "really"; "please"; "confirm";]
+             ~doc:"Confirm and bring the whole deployment down.")
+    in
+    let confirm_down deployment please =
+      if please
+      then (`Ok (Deployment.Run.down deployment))
+      else `Help (`Plain, Some "down")
+    in
+    sub_command
+      ~info:Term.(info "down"
+                    ~version ~sdocs:"COMMON OPTIONS" ~man:[]
+                    ~doc:("Bring the deployment DOWN \
+                           (i.e. secobox, cluster, and NFS servers.)"))
+      ~term: Term.(
+          ret (const confirm_down $ deployment_arg $ please_arg)
+        ) in
   let status =
     argless_sub_command "status" ~doc:"Get the status of the deployment."
       Deployment.Run.status in
@@ -229,6 +244,27 @@ let deployment_commands (deployment : unit -> Deployment.t) =
           $ deployment_arg
           $ user_info_term
         ) in
+  let deploy_debug_node =
+    let doc =
+      "Deploys a biokepi pod to the cluster that allows debugging the \
+       environment nodes live. The pod is automatically killed after \
+       sleeping for a given amount of time. Let it scheduled and deployed \
+       and once it is really running, you can connect and start a shell via
+       'kubectl exec -ti <POD_ID> bash'. Look for then '** DEBUG ME **'"
+    in
+    sub_command
+      ~info:Term.(info "deploy-debug-node" ~doc
+                    ~version ~sdocs:"COMMON OPTIONS" ~man:[])
+      ~term: Term.(
+          pure (fun deployment userinfo minutes ->
+              Deployment.Run.deploy_debug_node ?userinfo ~minutes deployment)
+          $ deployment_arg
+          $ user_info_term
+          $ Arg.(value & opt int 60
+                 @@ info ["sleep-for"; "s"]
+                  ~doc:("The amount of time in minutes the pod is available.")
+                  ~docv:"60")
+        ) in
   let backup_database =
     sub_command
       ~info:Term.(info "backup-database"
@@ -291,7 +327,7 @@ let deployment_commands (deployment : unit -> Deployment.t) =
     up; down; status; top; psql;
     coclobas_client; make_command_alias coclobas_client "cc";
     ketrew_configuration; biokepi_machine; useful_env;
-    docker_compose_config;
+    deploy_debug_node; docker_compose_config;
     preparation_workflow; test_biokepi_machine;
     backup_database; restore_database_backup;
     coclobas_logs; ketrew_logs;
