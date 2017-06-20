@@ -28,7 +28,7 @@ depends: [
   "genspio"
   "coclobas" {>= "0.0.1" }
   "ketrew"
-  "dockerfile"
+  "dockerfile" {<= "2.2.2" }
   "ppx_deriving_cmdliner" { >= "0.4.0" }
 ]
 available: [
