@@ -14,6 +14,7 @@ module Node = struct
     host : [
       | `Localhost
       | `Gcloud of Gcloud_instance.t
+      | `Aws_ssh of Aws_instance.Ssh.t
     ] [@main];
     properties: property list;
   } [@@deriving make]
@@ -21,6 +22,7 @@ module Node = struct
   let localhost ?properties () =
     make `Localhost ?properties
   let gcloud ?properties g = make (`Gcloud g) ?properties
+  let aws_ssh ?properties a = make (`Aws_ssh a) ?properties
 end
 
 module Extra_nfs_server = struct
@@ -116,6 +118,7 @@ type t = {
   db : Postgres.t option;
   dns : Gcloud_dns.t option;
   extra_nfs_servers : Extra_nfs_server.t list;
+  efs : Aws_efs.t option;
   ketrew : Ketrew_server.t option;
   coclobas : Coclobas.t option;
   letsencrypt : Letsencrypt.t option;
@@ -146,6 +149,8 @@ module Run = struct
       let tmp = Filename.temp_file "secotrec" "script.sh" in
       write_file tmp ~content:(Genspio.Language.to_many_lines cmd);
       Genspio_edsl.exec ["sh"; tmp]
+    | `Aws_ssh a ->
+      Aws_instance.Ssh.run_on ~name a cmd
 
   let cp_from_node t file_from file_to =
     match t.node.Node.host with
@@ -153,10 +158,23 @@ module Run = struct
       Gcloud_instance.copy_file node (`On_node file_from) (`Local file_to)
     | `Localhost ->
       Genspio_edsl.exec ["cp"; file_from; file_to]
+    | `Aws_ssh node ->
+      let name = sprintf "cp_from_node" in
+      let open Genspio_edsl in
+      seq_succeeds_or ~clean_up:[fail] ~name (
+        Aws_instance.Ssh.copy_file node (`On_node file_from) (`Local file_to)
+      )
+
   let cp_to_node t file_from file_to =
     match t.node.Node.host with
     | `Gcloud node ->
       Gcloud_instance.copy_file node (`Local file_from) (`On_node file_to)
+    | `Aws_ssh node ->
+      let name = sprintf "cp_to_node" in
+      let open Genspio_edsl in
+      seq_succeeds_or ~clean_up:[fail] ~name (
+        Aws_instance.Ssh.copy_file node (`Local file_from) (`On_node file_to)
+      )
     | `Localhost ->
       Genspio_edsl.exec ["cp"; file_from; file_to]
 
@@ -186,6 +204,10 @@ module Run = struct
       run_genspio Genspio_edsl.(seq [
           create_directories;
         ])
+    | `Aws_ssh node ->
+      run_genspio Genspio_edsl.(seq [
+          on_node t create_directories;
+        ])
 
   let destroy_node t =
     let open Genspio_edsl in
@@ -195,14 +217,14 @@ module Run = struct
         sayf "Shutting down the GCHost...";
         Gcloud_instance.destroy node;
       ]
-    | `Localhost ->
-      nop
+    | `Localhost -> nop
+    | `Aws_ssh _ -> nop
 
 
   let only_gcloud_node ~msg t f =
     match t.node.Node.host with
     | `Gcloud node -> f node
-    | `Localhost ->
+    | `Localhost | `Aws_ssh _ ->
       ksprintf failwith
         "The feature “%s” is only available on GCloud instances"
         msg
@@ -214,7 +236,7 @@ module Run = struct
 
   let use_sudo t =
     match t.node.Node.host with
-    | `Gcloud _ -> true
+    | `Gcloud _ | `Aws_ssh _ -> true
     | `Localhost -> false
 
   let docker_compose_command ?with_software ?save_output t more =
@@ -305,8 +327,15 @@ module Run = struct
       )
     );
     run_genspio ~name:"deploy-up" ~returns:0 (
+      let efs_ensure =
+        Option.map t.efs ~f:begin fun efs ->
+          let aws_cli = Aws_cli.guess () in
+          Aws_efs.To_genspio.ensure aws_cli efs
+          (* run_genspio ~name:"efs-up" ~returns:0 (on_node t (ensurer#ensure)); *)
+        end in
       on_node t (
         seq [
+          Option.value ~default:(sayf "No EFS to do.") efs_ensure;
           docker_compose_command ~with_software:false t ["up"; "-d"]
         ]
       );
@@ -315,6 +344,9 @@ module Run = struct
   let node_ip_address t =
     match t.node.Node.host with
     | `Gcloud node -> `External (Gcloud_instance.external_ip node)
+    | `Aws_ssh node ->
+      (* TODO: fix the name of the function or get the actuall IP address: *)
+      `External (Aws_instance.Ssh.hostname node |> Genspio_edsl.string)
     | `Localhost -> `Local
 
 
@@ -365,6 +397,12 @@ module Run = struct
       on_node t docker_compose_status_cmd;
       on_node t coclobas_status_cmd;
       on_node t ketrew_status_cmd;
+      Option.value_map ~default:nop t.efs ~f:begin fun efs ->
+        let aws_cli = Aws_cli.guess () in
+        on_node t (
+          Aws_efs.To_genspio.describe aws_cli efs
+        )
+      end;
       Option.value_map t.ketrew ~default:nop ~f:(fun kserver ->
           begin
             let cmd =
@@ -391,24 +429,30 @@ module Run = struct
     run_genspio (seq [
         seq (
           List.map t.extra_nfs_servers ~f:(fun nfs ->
-            seq [
-              sayf "Destroying the Extra-NFS server...";
-              on_node t (
-                let enfs = nfs.Extra_nfs_server.server in
-                if_seq
-                  (Gcloud_instance.instance_is_up (Nfs.Fresh.instance enfs))
-                  ~t:[
-                    exec [
-                      "sudo"; "docker"; "run";
-                      "hammerlab/keredofi:coclobas-gke-biokepi-default";
-                      "sh"; "-c";
-                      genspio_to_one_liner ~name:"destroy-nfs"
-                        (Nfs.Fresh.destroy enfs);
+              seq [
+                sayf "Destroying the Extra-NFS server...";
+                on_node t (
+                  let enfs = nfs.Extra_nfs_server.server in
+                  if_seq
+                    (Gcloud_instance.instance_is_up (Nfs.Fresh.instance enfs))
+                    ~t:[
+                      exec [
+                        "sudo"; "docker"; "run";
+                        "hammerlab/keredofi:coclobas-gke-biokepi-default";
+                        "sh"; "-c";
+                        genspio_to_one_liner ~name:"destroy-nfs"
+                          (Nfs.Fresh.destroy enfs);
+                      ]
                     ]
-                  ]
-                  ~e:[sayf "NFS extra server is already down"]
-              );
-            ]));
+                    ~e:[sayf "NFS extra server is already down"]
+                );
+              ]));
+        Option.value_map ~default:nop t.efs ~f:begin fun efs ->
+          let aws_cli = Aws_cli.guess () in
+          on_node t (
+            Aws_efs.To_genspio.destroy aws_cli efs
+          )
+        end;
         Option.value_map t.gke_cluster ~default:nop ~f:(fun kube ->
             seq [
               sayf "Shutting down the cluster...";
@@ -426,6 +470,8 @@ module Run = struct
           destroy_node t
         | `Localhost ->
           docker_compose_command t ["down"]
+        | `Aws_ssh node ->
+          sayf "Destruction of Aws-ssh nodes is not implemented"
         end;
       ])
 
@@ -476,9 +522,8 @@ module Run = struct
       let out, clos =
         Option.value_map path ~f:(fun p -> open_out p, close_out)
           ~default:(stdout, fun _ -> ()) in
-      let env k v =
-        fprintf out "export %s=%s\n%!" k v
-      in
+      let env k v = fprintf out "export %s=%s\n%!" k v in
+      let cmt s = fprintf out "# %s\n%!" s in
       let opt_iter ~f = function None -> () | Some x -> f x in
       opt_iter t.db ~f:begin fun pg ->
         env "PG_SERVICE_NAME" (Postgres.container_name pg);
@@ -492,6 +537,22 @@ module Run = struct
       end;
       opt_iter t.ketrew ~f:begin fun ks ->
         env "KETREW_SERVICE_NAME" (Ketrew_server.name ks);
+      end;
+      begin
+        let out s = env "CURRENT_BIOKEPI_WORK_DIR" s in
+        begin match Sys.getenv "BIOKEPI_WORK_DIR" with
+        | s -> out s
+        | (exception _) -> cmt "BIOKEPI_WORK_DIR is not overridden; \
+                                the current is the default."
+        end;
+        begin match t.biokepi_machine with
+        | Some biok ->
+          out biok.Biokepi_machine_generation.default_work_dir;
+          env "DEFAULT_BIOKEPI_WORK_DIR"
+            biok.Biokepi_machine_generation.default_work_dir;
+        | None ->
+          cmt "Biokepi-machine (hence default-biokepi-work-dir) not defined."
+        end;
       end;
       clos out;
       ()
@@ -524,27 +585,69 @@ module Run = struct
       Ketrew.Configuration.load_exn ~and_apply:true (`In_directory kconfdir) in
     Ketrew.Client.submit_workflow wf ~override_configuration
 
-  let create_simple_test_job ?userinfo ~cmd_str ~name t =
+  let create_simple_test_job ?userinfo ~commands ~name t =
     let biomachine =
-      Biokepi_machine_generation.to_ocaml ~with_script_header:true
-        (Option.value_exn t.biokepi_machine
-           ~msg:"missing biokepi-machine definition") in
+      Option.value_exn t.biokepi_machine
+        ~msg:"missing biokepi-machine definition" in
+    let machine_script =
+      Biokepi_machine_generation.to_ocaml ~with_script_header:true biomachine in
     let workflow =
-      sprintf
+      let part_1 =
 {ocaml|
 let workflow =
    let open Biokepi in
    let open KEDSL in
-   let program = Program.(sh "%s") in
+   let program =
+     let open Program in
+     let cmd c =
+       let shorten s =
+         match String.sub s ~index:0 ~length:50 with
+         | None -> s | Some s -> s ^ "…" in
+       shf "echo \"## Secotrec Test of Biokepi machine: %s\""
+         (Filename.quote (shorten c))
+       && shf "%s || { echo 'Command failed' ; echo failure >> /tmp/failures ; }" c
+     in
+     chain [
+|ocaml} in
+      let part_2 =
+        let cmdf fmt = ksprintf (sprintf "cmd %S;") fmt in
+        let workdir_to_test =
+          try Sys.getenv "BIOKEPI_WORK_DIR" with
+          | _ ->
+            biomachine.Biokepi_machine_generation.default_work_dir in
+        let test_file =
+          workdir_to_test // sprintf "secotest-%s.txt"
+            ODate.Unix.(now () |> Printer.to_iso) in
+        begin match commands with
+        | `Custom cmd ->
+          cmdf "%s" cmd
+        | `Test_workdir ->
+          String.concat ~sep:"\n" [
+            cmdf "ls -la $HOME";
+            cmdf "mkdir -p %s" workdir_to_test;
+            cmdf "echo 'Secotrec Biokepi Test' $(date) > %s" test_file;
+            cmdf "ls -la %s" workdir_to_test;
+            cmdf "cat %s" test_file;
+          ]
+        end
+      in
+      let part_3 =
+        sprintf
+{ocaml|
+     ]
+     && sh "if [ -f /tmp/failures ] ; then exit 1 ; else exit 0 ; fi"
+   in
+   let name = %S in
    let make = Machine.run_program ~name biokepi_machine program in
-   let name = "%s" in
+   (* let host = Machine.(as_host biokepi_machine) in *)
    workflow_node ~name without_product ~make
-|ocaml} cmd_str name in
+|ocaml} name in
+      part_1 ^ part_2 ^ part_3 in
     let kconfdir = Filename.get_temp_dir_name () // "kconf" in
     Generate.ketrew_configuration ?userinfo t ~path:kconfdir;
     let submission =
       sprintf
-{ocaml|
+        {ocaml|
 let () =
   let override_configuration =
     Ketrew.Configuration.load_exn ~and_apply:true (`In_directory %S) in
@@ -552,20 +655,19 @@ Ketrew.Client.submit_workflow workflow ~override_configuration
 |ocaml} kconfdir in
     write_file "/tmp/script.ml"
       (sprintf "%s\n\n%s\n\n%s\n"
-         biomachine workflow submission);
+         machine_script workflow submission);
     cmdf "ocaml /tmp/script.ml"
 
 
   let deploy_debug_node ~minutes ?userinfo t =
     let cmd_str = sprintf "sleep %d" (minutes * 60) in (* mins -> secs *)
     let name = sprintf "** DEBUG ME in %d mins **" minutes in
-    create_simple_test_job ~cmd_str ~name t
+    create_simple_test_job ~commands:(`Custom cmd_str) ~name t
 
 
   let test_biokepi_machine ?userinfo t =
-    let cmd_str = "du -sh $HOME" in
     let name = "Test of the biokepi machine" in
-    create_simple_test_job ~cmd_str ~name t
+    create_simple_test_job ~name t ~commands:`Test_workdir
 
 
   let psql t ~args =

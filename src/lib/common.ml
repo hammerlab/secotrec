@@ -26,6 +26,9 @@ let cmdf ?returns fmt =
         ksprintf failwith "CMD: %S returned %d" cmd other)
     fmt
 
+let env_exn v =
+  try Sys.getenv v
+  with _ -> failwith (sprintf "Environment variable missing: %s" v)
 
 let check_size_of_script ?(name = "") str =
   (*

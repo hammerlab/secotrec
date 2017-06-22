@@ -51,7 +51,7 @@ let item_to_workflow item =
         make_downloader
           ~tmpdir:(in_directory // sprintf "tmp-%s" digest_url) in
       let p =
-        seq_succeeds_or ~name:"preparation" ~clean_up:[fail] [
+        seq_succeeds_or ~silent:false ~name:"preparation" ~clean_up:[fail] [
           cmd "whoami";
           cmd "ls -la";
           cmd "df -h";

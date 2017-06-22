@@ -93,16 +93,34 @@ end = struct
 
 end
 
+let yum_docker_ec2 = Genspio_edsl.[
+  exec ["sudo"; "yum"; "update"; "-y"; "";];
+  exec ["sudo"; "yum"; "install"; "-y"; "docker";];
+  exec ["sudo"; "service"; "docker"; "start";];
+  exec ["sudo"; "usermod"; "-a"; "-G"; "docker"; "ec2-user";];
+  (* exec ["docker"; "info";]; *)
+]
 
 let ensure_software =
   (* Cf. https://docs.docker.com/compose/install/ *)
   let open Genspio_edsl in
+  let which exe = exec ["which"; exe] |> succeeds_silently in
   ensure ~name:("Docker and Docker-compose")
-    ((exec ["which"; "docker"] |> succeeds_silently)
-     &&&
-     (exec ["which"; "docker-compose"] |> succeeds_silently))
+    (which "docker" &&& which "docker-compose")
     [
-      Apt.install ["docker.io"];
+      switch [
+        case (which "apt-get") [
+          Apt.install ["docker.io"];
+        ];
+        case (which "yum") [
+          seq_succeeds_or ~clean_up:[fail]
+            ~name:"yum-docker" ~silent:false yum_docker_ec2;
+        ];
+        default [
+          sayf "No APT, no Yum, don't know how to get Docker, \
+                hoping for the best.";
+        ];
+      ];
       exec ["sudo"; "bash"; "-c";
             "curl -L \
              \"https://github.com/docker/compose/releases/download/1.9.0/\
@@ -112,6 +130,7 @@ let ensure_software =
     ]
 
 let make_command ?(with_software = true)
+    ?(docker_compose_exec = "/usr/local/bin/docker-compose")
     ?save_output ~use_sudo ~compose_config ~tmp_dir cli =
   let docker_compose = tmp_dir // "docker-compose.json" in
   let open Genspio.EDSL in
@@ -133,6 +152,6 @@ let make_command ?(with_software = true)
     exec ["cd"; tmp_dir]; (* maybe useless since we use `-f` below: *)
     exec (
       (if use_sudo then ["sudo"] else [])
-      @ [ "docker-compose"; "-f"; docker_compose] @ cli
+      @ [ docker_compose_exec; "-f"; docker_compose] @ cli
     ) |> with_saving;
   ]

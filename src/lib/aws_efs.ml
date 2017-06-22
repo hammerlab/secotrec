@@ -1,30 +1,5 @@
 open Common
 
-module Aws_cli = struct
-  type t = {
-    access_key: string [@env "AWS_KEY_ID"];
-    (** AWS Access Key ID (looks like "AKIDEDJEIIDDENJNJDE435F"). *)
-
-    secret_key: string [@env "AWS_SECRET_KEY"];
-    (** AWS Secret Access Key (looks like "8fJIDe933900n45GTe9deiDJEIjj/deyRdiO90C"). *)
-
-    default_region: string [@default "us-east-1"];
-    (** AWS Configured default region. *)
-
-  } [@@deriving make, cmdliner]
-
-  let configure t =
-    let open Genspio.EDSL in
-    let set k v =
-      exec ["aws"; "configure"; "set"; k; v] in
-    seq [
-      set "aws_access_key_id" t.access_key;
-      set "aws_secret_access_key" t.secret_key;
-      set "default.region" t.default_region;
-    ]
-
-end
-
 let tr_remove_new_lines = Genspio.EDSL.exec ["tr"; "-d"; "\\n"]
 
 type guess_value = [ `From_metadata | `Value of string ] [@@deriving yojson]
@@ -34,6 +9,8 @@ type t = {
   guess_subnet: guess_value [@default `From_metadata];
   guess_secgroup: guess_value [@default `From_metadata];
 } [@@deriving yojson, make]
+
+let default_mount_point t = sprintf "/mnt-%s" t.name
 
 module To_genspio = struct
   open Genspio_edsl
@@ -147,7 +124,7 @@ module To_genspio = struct
       ]
       |> get_successful_single_string ~or_else:fail
 
-  let mount_point t = ksprintf string "/mnt-%s" t.name
+  let mount_point t = string (default_mount_point t)
 
   let ensure_nfs_traffic_in_security_group t ~security_group =
     seq [
@@ -270,6 +247,30 @@ module To_genspio = struct
         ~security_group:(security_group ~aws_cli t);
       wait_for_mount_target_available t ~mount_target_id:mount_target_id#get;
       mount t ~mount_target_id:mount_target_id#get;
+    ]
+
+  let full_mount_script ?owner t =
+    let aws_cli = Aws_cli.guess () in
+    let file_system_id = get_or_create_file_system_id t in
+    let mount_target_id =
+      get_or_create_mount_target t ~fs_id:file_system_id#get
+        ~subnet_id:(subnet_id ~aws_cli t)
+        ~secgrp_id:(security_group ~aws_cli t) in
+    Genspio_edsl.seq_succeeds_or
+      ~silent:false
+      ~clean_up:[fail]
+      ~name:"Mount EFS" [
+      Aws_cli.configure aws_cli;
+      file_system_id#build;
+      mount_target_id#build;
+      mount t ~mount_target_id:mount_target_id#get;
+      begin match owner with
+      | None -> nop
+      | Some (user, grp) ->
+        call [string "sudo";
+              string "chown"; string (sprintf "%s:%s" user grp);
+              mount_point t]
+      end
     ]
 
   let describe ~aws_cli t =

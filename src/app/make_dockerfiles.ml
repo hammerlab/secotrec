@@ -432,19 +432,19 @@ module Image = struct
           Test.test_dashdashversion "ketrew" "3.1.0+dev";
           ketrew_with_pg;
           (* coclobas --version gives: "0.0.2-dev+<commit-hash-prefix>": *)
-          Test.succeeds "coclobas --version | grep 0.0.2-dev";
-          Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.2-dev";
+          Test.succeeds "coclobas --version | grep 0.0.3-dev";
+          Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.3-dev";
         ];
       make "coclobas-gke-biokepi-default"
         ~description:"The default image used by Secotrec for GKE/Local \
                       deployments, it has `gcloud`, `gcloudnfs`, the Biokepi \
-                      NFS-friendly user, TLS-tunnel, Coclobas 0.0.1 and \
+                      NFS-friendly user, TLS-tunnel, Coclobas 0.0.2 and \
                       Ketrew `master` branch (until next version)."
         ~dockerfile:(coclobas ~with_gcloud:true ~with_gcloudnfs:true
                        ~with_biokepi_user:true
                        ~with_secotrec_stuff:true
                        ~ketrew:(`Branch "master")
-                       ~coclobas:(`Version "0.0.1") ())
+                       ~coclobas:(`Version "0.0.2") ())
         ~tests:begin
           let cmds_opam_and_biokepi = [
             "echo $PATH";
@@ -457,8 +457,8 @@ module Image = struct
           [
             Test.test_dashdashversion "ketrew" "3.1.0+dev";
             ketrew_with_pg;
-            Test.test_dashdashversion "coclobas" "0.0.0";
-            Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.1";
+            Test.test_dashdashversion "coclobas" "0.0.2";
+            Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.2";
           ]
           @ List.map cmds_opam_and_biokepi ~f:Test.succeeds
           @ List.map cmds_opam_and_biokepi ~f:(fun s ->
@@ -477,8 +477,8 @@ module Image = struct
           Test.test_dashdashversion "ketrew" "3.1.0+dev";
           ketrew_with_pg;
           (* coclobas --version gives: "0.0.2-dev+<commit-hash-prefix>": *)
-          Test.succeeds "coclobas --version | grep 0.0.2-dev";
-          Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.2-dev";
+          Test.succeeds "coclobas --version | grep 0.0.3-dev";
+          Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.3-dev";
         ];
       make "coclobas-aws-biokepi-dev"
         ~description:"Image similar to `coclobas-gke-biokepi-default` but \
@@ -493,8 +493,8 @@ module Image = struct
           Test.test_dashdashversion "ketrew" "3.1.0+dev";
           ketrew_with_pg;
           (* coclobas --version gives: "0.0.2-dev+<commit-hash-prefix>": *)
-          Test.succeeds "coclobas --version | grep 0.0.2-dev";
-          Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.2-dev";
+          Test.succeeds "coclobas --version | grep 0.0.3-dev";
+          Test.succeeds "ocamlfind list | grep coclobas | grep 0.0.3-dev";
           aws_cli_version;
         ];
       make "secotrec-default" ~dockerfile:(secotrec ())
@@ -503,7 +503,7 @@ module Image = struct
                       (and some tools it may use) installed."
         ~tests:[
           Test.test_dashdashversion "ketrew" "3.1.0+dev";
-          Test.test_dashdashversion "coclobas" "0.0.0";
+          Test.test_dashdashversion "coclobas" "0.0.2";
           Test.test_dashdashversion "secotrec-gke" "0.0.0";
           Test.test_dashdashversion "secotrec-local" "0.0.0";
           Test.succeeds "nslookup hammerlab.org";

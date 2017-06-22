@@ -24,8 +24,8 @@ let work_dir =
     env_exn "BIOKEPI_WORK_DIR"
   with _ -> %S
 |ocaml} default_work_dir
-    
-let optional_setup = {ocaml|
+
+let optional_setup ~default_docker_image = sprintf {ocaml|
 let install_tools_path =
   try env_exn "INSTALL_TOOLS_PATH"
   with _ -> work_dir // "toolkit"
@@ -40,10 +40,10 @@ let allow_daemonize =
   with _ -> false
 let image =
   try env_exn "DOCKER_IMAGE"
-  with _ -> "hammerlab/keredofi:biokepi-run-gcloud"
+  with _ -> %S
 let env_exn_tool_loc s tool =
   try (`Wget (Sys.getenv s)) with _ ->
-    `Fail (sprintf "No location provided for %s" tool)
+    `Fail (sprintf "No location provided for %%s" tool)
 let netmhc_tmpdir =
   try env_exn "NETMHC_TMPDIR"
   with _ -> "/tmp" (* local to each worker pod *)
@@ -59,6 +59,7 @@ let netmhc_config () = Biokepi.Setup.Netmhc.(
 let gatk_jar_location () = env_exn_tool_loc "GATK_JAR_URL" "GATK"
 let mutect_jar_location () = env_exn_tool_loc "MUTECT_JAR_URL" "MuTect"
 |ocaml}
+    default_docker_image
 
 let set_name name = {ocaml|
 let name = "Coclomachine"
@@ -78,6 +79,10 @@ let make_volume_mounts mounts =
           ~host:%S ~path:%S ~point:%S ());\n" host path point
   | `Local (host, mount) ->
     addf "  `Local (%S, %S);\n" host mount
+  | `Aws_efs efs ->
+    addf "  `Efs (%S)"
+      (Aws_efs.To_genspio.full_mount_script ~owner:("biokepi", "biokepi") efs
+       |> Genspio.Language.to_one_liner);
   end;
   addf "]\n";
   Buffer.contents buf
@@ -86,7 +91,7 @@ let make_volume_mounts mounts =
 let biokepi_machine_value actual_run_program_blob =
 {ocaml|
 let biokepi_machine =
-  let host = Ketrew.EDSL.Host.parse "/tmp/KT-coclomachine/" in
+  let host = Ketrew.EDSL.Host.parse "/tmp/KT-coclomachine/?shell=bash" in
   let max_processors = 7 in
   let run_program ?name ?(requirements = []) p =
     let open Ketrew.EDSL in
@@ -101,7 +106,11 @@ let biokepi_machine =
     let with_more_info prog =
       let open Program in
       let cmd c =
-        shf "echo \"## Biokepi machine: %s\"" (Filename.quote c)
+       let shorten s =
+         match String.sub s ~index:0 ~length:50 with
+         | None -> s | Some s -> s ^ "…" in
+       shf "echo \"## Biokepi machine prelude: %s\""
+         (Filename.quote (shorten c))
         && shf "%s || echo 'Command failed'" c
       in
       cmd "umask 000"
@@ -111,6 +120,8 @@ let biokepi_machine =
       && cmd "uname -a"
       && cmd "export PATH=/opt/google-cloud-sdk/bin:$PATH"
       && cmd "ls /opt/google-cloud-sdk/bin"
+      && cmd "mount"
+      && cmd "df -h"
       && prog
     in
   |ocaml}
@@ -166,11 +177,44 @@ let run_program_blob_for_gke = {ocaml|
         ~volume_mounts
         (with_more_info p)
   |ocaml}
-  
+
+let run_program_blob_for_aws = {ocaml|
+    match how with
+    | `On_server_node ->
+      daemonize ~host ~using:`Python_daemon (with_more_info p)
+    | `Submit_to_coclobas ->
+  (** For now we seem to need to ask for full nodes for the system not to
+      go nuts: *)
+      (* let cpus = *)
+      (*   List.find_map requirements ~f:(function `Processors i -> Some i | _ -> None) *)
+      (*   |> Option.value ~default:1 in *)
+      let cpus = 7 in
+      let program_with_volume_mounts =
+        let open Program in
+        chain (List.map volume_mounts ~f:(function
+               | `Efs cmds -> exec ["bash"; "-c"; cmds]
+               | `Nfs_kube _
+               | `Local _ ->
+                 failwith "AWS-Biokepi-Machines only support EFS mounts!"
+              ))
+        && (with_more_info p) in
+      Coclobas_ketrew_backend.Plugin.aws_batch_program
+        program_with_volume_mounts
+        ~memory:(`MB 30_000)
+        ~cpus
+        ~base_url:"http://coclo:8082"
+        ~image
+
+|ocaml}
+
 type t = {
   name: string [@main ];
   default_work_dir: string;
-  mounts: [ `Nfs_kube of Nfs.Mount.t | `Local of string * string] list;
+  mounts: [
+    | `Nfs_kube of Nfs.Mount.t
+    | `Local of string * string
+    | `Aws_efs of Aws_efs.t
+  ] list;
   coclobas: Coclobas.t;
 } [@@deriving make]
 
@@ -184,18 +228,22 @@ let to_ocaml ?(with_script_header = true) t =
     | `GKE _ -> run_program_blob_for_gke
     | `Local _ -> run_program_blob_for_local_docker ~coclobas_service:t.coclobas
     | `Aws_batch _ ->
-      failwith "AWS-Batch biokepi-machine generation: NOT IMPLEMENTED"
+      run_program_blob_for_aws
   in
+  let default_docker_image =
+    match Coclobas.cluster t.coclobas with
+    | `GKE _
+    | `Local _ -> "hammerlab/keredofi:biokepi-run-gcloud"
+    | `Aws_batch _ -> "hammerlab/keredofi:biokepi-run-aws" in
   let pieces =
     only_if with_script_header [script_header]
     @ [
       pervasives_header;
       get_work_dir ~default_work_dir:t.default_work_dir;
-      optional_setup;
+      optional_setup ~default_docker_image;
       set_name t.name;
       make_volume_mounts t.mounts;
       biokepi_machine_value run_program_blob;
     ]
   in
   String.concat ~sep:"\n" pieces
-

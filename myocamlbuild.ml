@@ -40,12 +40,18 @@ let example_local : Project.item =
     ~thread:()
     ~file:"src/app/example_local.ml"
     ~internal_deps:[lib]
+let example_aws =
+  Project.app ("secotrec-aws")
+    ~bin_annot:()
+    ~thread:()
+    ~file:"src/app/example_aws.ml"
+    ~internal_deps:[lib]
 
 let simple_efs : Project.item =
   Project.app ("secotrec-aws-efs")
     ~bin_annot:()
     ~thread:()
-    ~file:"src/app/aws_efs.ml"
+    ~file:"src/app/aws_efs_test.ml"
     ~internal_deps:[lib]
 
 let aws_node =
@@ -82,6 +88,7 @@ let () =
     (List.filter_opt [
         Some lib;
         Some example_gke;
+        Some example_aws;
         Some example_local;
         Some make_dockerfiles;
         Some simple_efs;
