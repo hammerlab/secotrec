@@ -24,11 +24,6 @@ let configuration =
            <http://aspirine.org/htpasswd_en.html>\n\
            Please use the `bcrypt` hash (others may not work with nginx by default)";
     ];
-    section "DNS / TLS" [
-      env "certificate_email" ~required:true ~example:"sherlock@example.com"
-        ~help:"Let's Encrypt wants an email address to associate with\
-               the TLS certificate";
-    ];
     section "Ketrew/Coclobas"
       begin [
         env "auth_token"
