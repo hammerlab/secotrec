@@ -126,6 +126,7 @@ type t = {
   proxy_nginx: Nginx.Proxy.t option;
   tlstunnel : Tlstunnel.t option;
   preparation: Data_preparation.t option;
+  extra_services: Docker_compose.Configuration.service list;
   name : string [@main ];
 } [@@deriving make]
 
@@ -138,7 +139,9 @@ let compose_configuration t =
     Option.map ~f:Postgres.to_service t.db;
     Option.map ~f:Ketrew_server.to_service t.ketrew;
     Option.map ~f:Tlstunnel.to_service t.tlstunnel;
-  ] |> Docker_compose.Configuration.make
+  ]
+  @ t.extra_services
+  |> Docker_compose.Configuration.make
 
 module Run = struct
 
