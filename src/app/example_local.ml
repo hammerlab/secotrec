@@ -43,7 +43,11 @@ let configuration =
                    bucket URI separated by a comma.\n\
                    This setup also requires to pass the AWS credentials \
                    through environment variables: \
-                   `AWS_KEY_ID` and `AWS_SECRET_KEY`."
+                   `AWS_KEY_ID` and `AWS_SECRET_KEY`.";
+          env "coclobas_docker_image" ~required:false
+            ~help:"Override the default Docker image to use for the Ketrew \
+                   and Coclobas services.";
+
         ]
         @ Util.common_opam_pins#configuration
       end;
@@ -81,15 +85,15 @@ let example () =
     Postgres.of_uri
       (Uri.of_string "postgresql://pg/?user=postgres&password=kpass") in
   let opam_pin = Util.common_opam_pins#opam_pins configuration in
+  let image = conf_opt "coclobas_docker_image" in
   let coclo =
-    let cluster, image =
+    let cluster =
       match conf_opt "aws_batch" with
-      | None -> `Local (conf "coclobas_max_jobs" |> int_of_string), None
+      | None -> `Local (conf "coclobas_max_jobs" |> int_of_string)
       | Some s ->
         begin match String.split ~on:(`Character ',') s with
         | [queue; bucket] ->
-          `Aws_batch (Coclobas.Aws_batch_cluster.make ~queue ~bucket),
-          Some "hammerlab/keredofi:coclobas-aws-biokepi-dev"
+          `Aws_batch (Coclobas.Aws_batch_cluster.make ~queue ~bucket)
         | _ -> failwith (sprintf "wrong format for `aws_batch`: %S" s)
         end in
     Coclobas.make cluster ~db ~opam_pin ~tmp_dir:coclo_tmp_dir ?image in
@@ -102,7 +106,7 @@ let example () =
       try
         conf "ketrew_debug_functions"|> String.split ~on:(`Character ',')
       with _ -> [] in
-    Ketrew_server.make ~port:8123 "kserver" ~auth_token ~db
+    Ketrew_server.make ~port:8123 "kserver" ~auth_token ~db ?image
       ~ketrew_debug_functions
       ~nfs_mounts
       ~local_volumes:(
