@@ -61,7 +61,7 @@ let example () =
     Option.map (conf_opt "biokepi_work") ~f:(fun hostpath ->
         object
           method host = hostpath
-          method mount = "/nfsaa"
+          method mount = "/biokepi"
         end) in
   let coclo_tmp_dir =
     "/tmp/secotrec-local-shared-temp" in
