@@ -63,7 +63,10 @@ let example () =
   let coclo_tmp_dir =
     "/tmp/secotrec-local-shared-temp" in
   let node =
-    let properties = [ Deployment.Node.has_directory coclo_tmp_dir] in
+    let properties =
+      Option.value_map ~default:[] (conf_opt "epidisco_dev")
+        ~f:(fun d -> [Deployment.Node.has_directory d])
+      @ [ Deployment.Node.has_directory coclo_tmp_dir] in
     match conf_opt "gcloud_name" with
     | Some name ->
       Deployment.Node.gcloud ~properties (
