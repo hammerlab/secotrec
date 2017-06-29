@@ -50,6 +50,7 @@ let configuration =
           ~help:"The maximal size of the Kubernetes cluster.";
         env "cluster_machine_type" ~default:"n1-highmem-8"
           ~help:"The machine-type of the Kubernetes compute nodes.";
+        Util.coclobas_docker_image#configuration;
       ]
       @ Util.common_opam_pins#configuration
     end;
@@ -122,7 +123,8 @@ let example_1 () =
                     ~msg:"cluster_max_nodes should be an integer")
       (prefix ^ "-kube-cluster") ~zone in
   let opam_pin = Util.common_opam_pins#opam_pins configuration in
-  let coclo = Coclobas.make (`GKE cluster) ~db ~opam_pin in
+  let image =  Util.coclobas_docker_image#get configuration in
+  let coclo = Coclobas.make ?image (`GKE cluster) ~db ~opam_pin in
   let auth_token = conf  "auth_token" in
   let extra_nfs_servers =
     conf "extra_nfs_servers"
@@ -134,7 +136,7 @@ let example_1 () =
   in
   let ketrew =
     Ketrew_server.make
-      ~opam_pin "kserver" ~auth_token ~db ~nfs_mounts in
+      ~opam_pin "kserver" ~auth_token ?image ~db ~nfs_mounts in
   let proxy_port = 8842 in
   let proxy_nginx =
     Option.map (conf_opt "htpasswd") ~f:(fun htpasswd ->

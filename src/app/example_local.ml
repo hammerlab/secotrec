@@ -44,10 +44,7 @@ let configuration =
                    This setup also requires to pass the AWS credentials \
                    through environment variables: \
                    `AWS_KEY_ID` and `AWS_SECRET_KEY`.";
-          env "coclobas_docker_image" ~required:false
-            ~help:"Override the default Docker image to use for the Ketrew \
-                   and Coclobas services.";
-
+          Util.coclobas_docker_image#configuration;
         ]
         @ Util.common_opam_pins#configuration
       end;
@@ -85,7 +82,7 @@ let example () =
     Postgres.of_uri
       (Uri.of_string "postgresql://pg/?user=postgres&password=kpass") in
   let opam_pin = Util.common_opam_pins#opam_pins configuration in
-  let image = conf_opt "coclobas_docker_image" in
+  let image =  Util.coclobas_docker_image#get configuration in
   let coclo =
     let cluster =
       match conf_opt "aws_batch" with

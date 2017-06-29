@@ -35,3 +35,14 @@ let nfs_mounts_configuration () =
            It is a colon-separated list of NFS mounts, and each mount is a \
            comma-separated tuple:\n\
            <server-hostname>,<server-side-storage-path>,<witness-file>,<mount-point>"
+
+let coclobas_docker_image =
+  let open Configuration_dot_env in
+  object
+    method configuration =
+      env "coclobas_docker_image" ~required:false
+        ~help:"Override the default Docker image to use for the Ketrew \
+               and Coclobas services.";
+    method get configuration =
+      get_exn configuration "coclobas_docker_image"
+  end
