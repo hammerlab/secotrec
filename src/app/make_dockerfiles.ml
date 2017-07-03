@@ -272,6 +272,7 @@ module Dockerfiles = struct
         ~more_installs:["tls"]
         [
           github_pin "ketrew" "master";
+          github_pin "coclobas" "master";
           github_pin "biokepi" "master";
           github_pin "secotrec" "master";
         ];
@@ -503,7 +504,7 @@ module Image = struct
                       (and some tools it may use) installed."
         ~tests:[
           Test.test_dashdashversion "ketrew" "3.1.0+dev";
-          Test.test_dashdashversion "coclobas" "0.0.2";
+          Test.succeeds "coclobas --version | grep 0.0.3-dev";
           Test.test_dashdashversion "secotrec-gke" "0.0.0";
           Test.test_dashdashversion "secotrec-local" "0.0.0";
           Test.succeeds "nslookup hammerlab.org";

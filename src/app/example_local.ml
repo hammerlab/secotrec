@@ -14,7 +14,10 @@ let configuration =
     section "Additional Services" [
       env "tls_port" ~required:false ~example:"22443"
         ~help:"Force the use of a TLS tunnel exposed at a given port (highly \
-               recommended when using a publicly visible instance)."
+               recommended when using a publicly visible instance).";
+      env "epidisco_dev" ~required:false ~example:"/path/to/shared/directory"
+        ~help:"Create an epidisco developement environment docker-compose \
+               service, and mount the directory at /epidisco-shared";
     ];
     section "Biokepi" [
       env "biokepi_work" ~required:false
@@ -40,7 +43,8 @@ let configuration =
                    bucket URI separated by a comma.\n\
                    This setup also requires to pass the AWS credentials \
                    through environment variables: \
-                   `AWS_KEY_ID` and `AWS_SECRET_KEY`."
+                   `AWS_KEY_ID` and `AWS_SECRET_KEY`.";
+          Util.coclobas_docker_image#configuration;
         ]
         @ Util.common_opam_pins#configuration
       end;
@@ -54,12 +58,15 @@ let example () =
     Option.map (conf_opt "biokepi_work") ~f:(fun hostpath ->
         object
           method host = hostpath
-          method mount = "/nfsaa"
+          method mount = "/biokepi"
         end) in
   let coclo_tmp_dir =
     "/tmp/secotrec-local-shared-temp" in
   let node =
-    let properties = [ Deployment.Node.has_directory coclo_tmp_dir] in
+    let properties =
+      Option.value_map ~default:[] (conf_opt "epidisco_dev")
+        ~f:(fun d -> [Deployment.Node.has_directory d])
+      @ [ Deployment.Node.has_directory coclo_tmp_dir] in
     match conf_opt "gcloud_name" with
     | Some name ->
       Deployment.Node.gcloud ~properties (
@@ -78,15 +85,15 @@ let example () =
     Postgres.of_uri
       (Uri.of_string "postgresql://pg/?user=postgres&password=kpass") in
   let opam_pin = Util.common_opam_pins#opam_pins configuration in
+  let image =  Util.coclobas_docker_image#get configuration in
   let coclo =
-    let cluster, image =
+    let cluster =
       match conf_opt "aws_batch" with
-      | None -> `Local (conf "coclobas_max_jobs" |> int_of_string), None
+      | None -> `Local (conf "coclobas_max_jobs" |> int_of_string)
       | Some s ->
         begin match String.split ~on:(`Character ',') s with
         | [queue; bucket] ->
-          `Aws_batch (Coclobas.Aws_batch_cluster.make ~queue ~bucket),
-          Some "hammerlab/keredofi:coclobas-aws-biokepi-dev"
+          `Aws_batch (Coclobas.Aws_batch_cluster.make ~queue ~bucket)
         | _ -> failwith (sprintf "wrong format for `aws_batch`: %S" s)
         end in
     Coclobas.make cluster ~db ~opam_pin ~tmp_dir:coclo_tmp_dir ?image in
@@ -94,12 +101,12 @@ let example () =
   let ketrew =
     let nfs_mounts =
       Option.value_map ~default:[] (conf_opt "nfs_mounts")
-      ~f:Nfs.Mount.of_colon_separated_csv in
+        ~f:Nfs.Mount.of_colon_separated_csv in
     let ketrew_debug_functions =
       try
         conf "ketrew_debug_functions"|> String.split ~on:(`Character ',')
       with _ -> [] in
-    Ketrew_server.make ~port:8123 "kserver" ~auth_token ~db
+    Ketrew_server.make ~port:8123 "kserver" ~auth_token ~db ?image
       ~ketrew_debug_functions
       ~nfs_mounts
       ~local_volumes:(
@@ -138,12 +145,23 @@ let example () =
             "https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37_20161007.tgz"
             ~in_directory:(bw#mount // "workdir/reference-genome");
         ]) in
+  let extra_services =
+    match conf_opt "epidisco_dev" with
+    | None -> []
+    | Some path ->
+      [
+        Docker_compose.Configuration.service ~image:"hammerlab/keredofi:epidisco-dev"
+          ~volumes:[sprintf "%s:/epidisco-shared/" path]
+          ~start_up_script:"#!/bin/sh\nwhile true ; do sleep 42 ; done\n"
+          ~privileged:true "epidisco-dev"
+      ] in
   Deployment.make "Light-local" ~node
     ?tlstunnel
     ?preparation
     ?biokepi_machine
     ~db
     ~ketrew
+    ~extra_services
     ~coclobas:coclo
 
 let () = Command_line.run example ~configuration

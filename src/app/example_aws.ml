@@ -35,6 +35,7 @@ let configuration =
           ~help:"The AWS batch queue to configure Coclobas with.";
         env "aws_scripts_bucket" ~required:true ~example:"s3://some-bucket/some/path/"
           ~help:"The AWS S3 bucket to configure Coclobas with.";
+        Util.coclobas_docker_image#configuration;
       ] @ Util.common_opam_pins#configuration
       end;
     section "Additional Biokepi Configuration"
@@ -108,16 +109,18 @@ let deployment () =
     Postgres.of_uri
       (Uri.of_string "postgresql://pg/?user=postgres&password=kpass") in
   let opam_pin = Util.common_opam_pins#opam_pins configuration in
+  let image =
+    Util.coclobas_docker_image#get configuration
+    |> Option.value ~default:"hammerlab/keredofi:coclobas-aws-biokepi-dev"
+  in
   let coclobas =
     let cluster =
       let queue = conf "aws_batch_queue" in
       let bucket = conf "aws_scripts_bucket" in
       `Aws_batch (Coclobas.Aws_batch_cluster.make ~queue ~bucket) in
-    let image = "hammerlab/keredofi:coclobas-aws-biokepi-dev" in
     Coclobas.make cluster ~image ~db ~opam_pin in
   let efs = Aws_efs.make (conf "efs_name") in
   let ketrew =
-    let image = "hammerlab/keredofi:coclobas-aws-biokepi-dev" in
     Ketrew_server.make ~port:8123 "kserver" ~auth_token:"dielajdilejadelij"
       ~db ~opam_pin ~image
       ~after_mounts:(Aws_efs.To_genspio.full_mount_script efs)

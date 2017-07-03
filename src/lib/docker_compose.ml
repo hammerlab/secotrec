@@ -130,7 +130,7 @@ let ensure_software =
     ]
 
 let make_command ?(with_software = true)
-    ?(docker_compose_exec = "/usr/local/bin/docker-compose")
+    ?(docker_compose_exec = "docker-compose")
     ?save_output ~use_sudo ~compose_config ~tmp_dir cli =
   let docker_compose = tmp_dir // "docker-compose.json" in
   let open Genspio.EDSL in
