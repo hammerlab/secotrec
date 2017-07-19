@@ -665,12 +665,12 @@ Ketrew.Client.submit_workflow workflow ~override_configuration
   let deploy_debug_node ~minutes ?userinfo t =
     let cmd_str = sprintf "sleep %d" (minutes * 60) in (* mins -> secs *)
     let name = sprintf "** DEBUG ME in %d mins **" minutes in
-    create_simple_test_job ~commands:(`Custom cmd_str) ~name t
+    create_simple_test_job ?userinfo ~commands:(`Custom cmd_str) ~name t
 
 
   let test_biokepi_machine ?userinfo t =
     let name = "Test of the biokepi machine" in
-    create_simple_test_job ~name t ~commands:`Test_workdir
+    create_simple_test_job ?userinfo ~name t ~commands:`Test_workdir
 
 
   let psql t ~args =
