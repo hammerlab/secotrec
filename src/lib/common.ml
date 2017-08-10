@@ -6,6 +6,28 @@ let (//) = Filename.concat
 
 let debug_mode = try Sys.getenv "secotrec_debug" = "true" with _ -> false
 
+module Tmp = struct
+
+  let path =
+    begin match Sys.getenv "secotrec_tmp" with
+    | some -> some
+    | exception _ ->
+      begin match Sys.getenv "TMPDIR" with
+      | some -> some
+      | exception _ -> "/tmp"
+      end
+    end
+
+  let in_dir n = path // n
+
+  let fresh_name suf =
+    sprintf "%d-%d-%s"
+      (Unix.gettimeofday () *. 1000. |> int_of_float)
+      (Random.int 100_000)
+      suf
+
+end
+
 let read_file file =
   let i = open_in file in
   let b = Buffer.create 42 in
@@ -94,7 +116,7 @@ module Genspio_edsl = struct
       f;
       exec ["printf"; sprintf "\\n``````````\\n"];
     ]
-    
+
   let cat_markdown file tag =
     output_markdown_code tag @@ call [string "cat"; file]
 
@@ -107,10 +129,13 @@ module Genspio_edsl = struct
     List.fold l ~init:(bool true) ~f:(fun u v -> u &&& succeeds v)
 
   let seq_succeeds_or ?(silent = true) ~name ?(clean_up = []) cmds  =
+    let tmp_prefix = Tmp.fresh_name "-cmd" in
     let stdout i =
-      ksprintf string "/tmp/cmd-%s-stdout-%d" (sanitize_name name) i in
+      ksprintf string "/tmp/%s-%s-stdout-%d"
+        tmp_prefix (sanitize_name name) i in
     let stderr i =
-      ksprintf string "/tmp/cmd-%s-stderr-%d" (sanitize_name name) i in
+      ksprintf string "/tmp/%s-%s-stderr-%d"
+        tmp_prefix (sanitize_name name) i in
     let log i u =
       if silent
       then write_output ~stdout:(stdout i) ~stderr:(stderr i) u
@@ -175,8 +200,3 @@ module Genspio_edsl = struct
     ]
 
 end
-
-
-
-
-

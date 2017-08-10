@@ -246,7 +246,7 @@ module Run = struct
     let cmd =
       Docker_compose.make_command ?save_output ~use_sudo:(use_sudo t)
         ?with_software ~compose_config:(compose_configuration t)
-        ~tmp_dir:"/tmp/coclotest" more in
+        ~tmp_dir:(Tmp.in_dir "seco-docker-compose") more in
     cmd
 
   let docker_compose_get_container_id t ?with_software ~container =
@@ -656,10 +656,11 @@ let () =
     Ketrew.Configuration.load_exn ~and_apply:true (`In_directory %S) in
 Ketrew.Client.submit_workflow workflow ~override_configuration
 |ocaml} kconfdir in
-    write_file "/tmp/script.ml"
+    let script = Tmp.in_dir "script.ml" in
+    write_file script
       (sprintf "%s\n\n%s\n\n%s\n"
          machine_script workflow submission);
-    cmdf "ocaml /tmp/script.ml"
+    cmdf "ocaml %s" script
 
 
   let deploy_debug_node ~minutes ?userinfo t =
@@ -739,7 +740,7 @@ Ketrew.Client.submit_workflow workflow ~override_configuration
     |> on_node t |> run_genspio ~name:"backup_postgres";
     get_file_from_container t ~container_id
       ~container_path:"/backup.sql"
-      ~node_path:"/tmp/tmp-backup.sql"
+      ~node_path:("/tmp/" // Tmp.fresh_name "tmp-backup.sql")
       ~local_path:path;
     (* seq [ *)
     (*   container_id#make; *)
