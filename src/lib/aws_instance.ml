@@ -46,7 +46,8 @@ module Ssh = struct
 
 
   let run_on ~name t genspio =
-    let tmp =
+    let tmp = (* We need `/tmp` to make sure it exists on the Node. *)
+      (* It will be unique so there will be less access-rights risks. *)
       Filename.temp_file
         ~temp_dir:"/tmp" "secotrec" (sprintf "aws-%s-script.sh" name) in
     let content = Genspio.Language.to_many_lines genspio in

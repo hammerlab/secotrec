@@ -246,7 +246,7 @@ module Run = struct
     let cmd =
       Docker_compose.make_command ?save_output ~use_sudo:(use_sudo t)
         ?with_software ~compose_config:(compose_configuration t)
-        ~tmp_dir:"/tmp/coclotest" more in
+        ~tmp_dir:(Tmp.in_dir "seco-docker-compose") more in
     cmd
 
   let docker_compose_get_container_id t ?with_software ~container =
@@ -312,7 +312,6 @@ module Run = struct
           )
       ) |> run_genspio ~name:"letsencrypt-ensure" ~returns:0;
     end;
-    (* ignore (failwith "STOP"); *)
     run_genspio ~name:"nfs-up" (
       on_node t (
         seq (
@@ -334,7 +333,6 @@ module Run = struct
         Option.map t.efs ~f:begin fun efs ->
           let aws_cli = Aws_cli.guess () in
           Aws_efs.To_genspio.ensure aws_cli efs
-          (* run_genspio ~name:"efs-up" ~returns:0 (on_node t (ensurer#ensure)); *)
         end in
       on_node t (
         seq [
@@ -656,10 +654,11 @@ let () =
     Ketrew.Configuration.load_exn ~and_apply:true (`In_directory %S) in
 Ketrew.Client.submit_workflow workflow ~override_configuration
 |ocaml} kconfdir in
-    write_file "/tmp/script.ml"
+    let script = Tmp.in_dir "script.ml" in
+    write_file script
       (sprintf "%s\n\n%s\n\n%s\n"
          machine_script workflow submission);
-    cmdf "ocaml /tmp/script.ml"
+    cmdf "ocaml %s" script
 
 
   let deploy_debug_node ~minutes ?userinfo t =
@@ -739,25 +738,8 @@ Ketrew.Client.submit_workflow workflow ~override_configuration
     |> on_node t |> run_genspio ~name:"backup_postgres";
     get_file_from_container t ~container_id
       ~container_path:"/backup.sql"
-      ~node_path:"/tmp/tmp-backup.sql"
+      ~node_path:("/tmp/" // Tmp.fresh_name "tmp-backup.sql")
       ~local_path:path;
-    (* seq [ *)
-    (*   container_id#make; *)
-    (*   sayl "Getting backup from Postgres container (`%s`) to host." *)
-    (*     [container_id#get]; *)
-    (*   call ( *)
-    (*     (if use_sudo t then [string "sudo"] else []) *)
-    (*     @ [string "docker"] *)
-    (*     @ [string "cp"; string_concat [container_id#get; string ":"; *)
-    (*                                    string "/backup.sql"]; *)
-    (*        string "/tmp/backup.sql"] *)
-    (*   ); *)
-    (* ] *)
-    (* |> on_node t |> run_genspio ~name:"backup_postgres"; *)
-    (* seq [ *)
-    (*   sayf "Getting backup to %S" path; *)
-    (*   cp_from_node t "/tmp/backup.sql" path; *)
-    (* ] |> run_genspio ~name:"get-backup-locally"; *)
     ()
 
   let restore_db_backup t ~path =

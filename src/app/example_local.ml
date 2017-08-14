@@ -60,8 +60,7 @@ let example () =
           method host = hostpath
           method mount = "/biokepi"
         end) in
-  let coclo_tmp_dir =
-    "/tmp/secotrec-local-shared-temp" in
+  let coclo_tmp_dir = Tmp.path // "secotrec-local-shared-temp" in
   let node =
     let properties =
       Option.value_map ~default:[] (conf_opt "epidisco_dev")
