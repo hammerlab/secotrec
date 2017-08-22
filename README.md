@@ -5,7 +5,7 @@ Secotrec: Deploy Coclobas/Ketrew with class.
 `secotrec` is a library, it provides a bunch of hacks to create more or less
 generic deployments.
 
-It comes with 2 preconfigured “examples”. You should pick one.
+It comes with 3 preconfigured “examples”. You should pick one.
 
 1. `secotrec-gke`:
     - sets up a new GCloud host with a bunch of services:
@@ -16,14 +16,23 @@ It comes with 2 preconfigured “examples”. You should pick one.
     - it also deals with the GKE cluster, firewall rules, etc.
 2. `secotrec-local`: sets up Postgresql, Ketrew, and Coclobas (in local docker
    mode) running locally or on a fresh GCloud box.
+3. `seotrec-aws`: still experimental, sets up a similar deployment as
+   `secotrec-gke` based on AWS-Btatch.
 
-Both examples have the option of preparing the default biokepi-work directory
+The examples have the option of preparing the default biokepi-work directory
 with
 [`b37decoy_20160927.tgz`](https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37decoy_20160927.tgz) and
 [`b37_20161007.tgz`](https://storage.googleapis.com/hammerlab-biokepi-data/precomputed/b37_20161007.tgz).
 
-For those administration purposes, we also provide `secotrec-make-dockerfiles`,
+For other administration purposes, we also provide `secotrec-make-dockerfiles`,
 as `Dockerfile` generation tool.
+
+This file provides detailed usage information, for high-level
+*tutorial-oriented* documentation please check-out the
+[`hammerlab/wobidisco`](https://github.com/hammerlab/wobidisco) project.  A good
+starting point is the “Running Local”
+[tutorial](https://github.com/hammerlab/wobidisco/blob/master/doc/running-local.md).
+
 
 Install
 -------
