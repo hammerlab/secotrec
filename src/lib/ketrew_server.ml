@@ -46,7 +46,7 @@ let to_service t =
   let shell_cmd =
     let open Genspio_edsl in
     seq [
-      exec ["umask"; "0000"]; (* We're going to deal with ≥ 1 users. *)
+      exec ["umask"; "000"]; (* We're going to deal with ≥ 1 users. *)
       exec ["mkdir"; "-p"; tmpdir];
       exec ["sudo"; "chmod"; "-R"; "777"; tmpdir];
       Opam.Pin.list_to_command t.opam_pin;

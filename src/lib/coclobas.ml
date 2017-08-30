@@ -81,6 +81,7 @@ let to_service t =
   let start_up_script =
     Genspio.EDSL.(
       seq [
+        exec ["umask"; "000"];
         Opam.Pin.list_to_command t.opam_pin;
         Postgres.wait_for t.db;
         seq additional_setup;
