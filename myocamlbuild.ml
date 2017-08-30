@@ -26,7 +26,7 @@ let make_dockerfiles =
     ~bin_annot:()
     ~thread:()
     ~file:"src/app/make_dockerfiles.ml"
-    ~findlib_deps:["dockerfile.opam"]
+    ~findlib_deps:["dockerfile-opam"]
     ~internal_deps:[lib]
 let example_gke =
   Project.app ("secotrec-gke")
