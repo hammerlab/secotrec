@@ -36,6 +36,9 @@ let configuration =
           env "coclobas_max_jobs" ~required:false ~default:"2"
             ~help:"The limit on Coclobas' local-docker scheduler.";
           Util.nfs_mounts_configuration ();
+          env "ketrew_extra_mounts" ~required:false
+            ~help:"Make the Ketrew server mount more directories."
+            ~example:"/path-host:/path-container,/other-path-same-on-both";
           env "aws_batch" ~required:false
             ~help:"Use the experimental \
                    AWS-Batch backend of Coclobas instead of “Local-Docker.”\n\
@@ -105,6 +108,15 @@ let example () =
       try
         conf "ketrew_debug_functions"|> String.split ~on:(`Character ',')
       with _ -> [] in
+    let more_mounts =
+      conf_opt "ketrew_extra_mounts"
+      |> Option.value_map ~default:[] ~f:(fun s ->
+          String.split ~on:(`Character ',') s |> List.map ~f:(fun m ->
+              match String.split ~on:(`Character ':') s with
+              | [one] -> (one, one)
+              | one :: two :: [] -> (one, two)
+              | other -> ksprintf failwith "Wrong extra-mount format: %S (%S)" m s)
+        ) in
     Ketrew_server.make ~port:8123 "kserver" ~auth_token ~db ?image
       ~ketrew_debug_functions
       ~nfs_mounts
@@ -112,6 +124,7 @@ let example () =
         [coclo_tmp_dir, coclo_tmp_dir]
         @ Option.value_map biokepi_work ~default:[] ~f:(fun bw ->
             [bw#host, bw#mount])
+        @ more_mounts
       )
       ~opam_pin
   in
