@@ -12,6 +12,7 @@ type t = {
   local_volumes: (string * string) list;
   opam_pin: Opam.Pin.t list;
   ketrew_debug_functions: string list;
+  read_only: bool [@default false];
   name: string [@main ];
 } [@@deriving make]
 
@@ -30,6 +31,7 @@ let to_service t =
       engine ~database_parameters () in
     let prof =
       server
+        ~read_only_mode:t.read_only
         ~engine
         ~authorized_tokens:[
           authorized_token ~name:"From-env" t.auth_token;

@@ -33,6 +33,8 @@ let configuration =
           env "ketrew_auth_token" ~required:false ~default:"nekot"
             ~help:"The auth-token used by Ketrew, if you are running on a \n\
                    GCloud instance it is highly recommended to change this!";
+          env "ketrew_read_only" ~required:false ~default:"false"
+            ~help:"Whether to Run the Ketrew server in READ-ONLY mode.";
           env "coclobas_max_jobs" ~required:false ~default:"2"
             ~help:"The limit on Coclobas' local-docker scheduler.";
           Util.nfs_mounts_configuration ();
@@ -118,6 +120,7 @@ let example () =
               | other -> ksprintf failwith "Wrong extra-mount format: %S (%S)" m s)
         ) in
     Ketrew_server.make ~port:8123 "kserver" ~auth_token ~db ?image
+      ~read_only:(conf_opt "ketrew_read_only" = Some "true")
       ~ketrew_debug_functions
       ~nfs_mounts
       ~local_volumes:(
